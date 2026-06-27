@@ -1,0 +1,317 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+@import "ol/ol.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: #1a1a1a;
+  background: #f7f7f5;
+}
+
+/* Nilam Mobile — scroll works, scrollbar UI hidden */
+[data-nilam-mobile],
+[data-nilam-mobile] * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+[data-nilam-mobile] *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Audit Log — search suggestions overlay without shifting cards */
+[data-audit-log] .audit-search-dropdown {
+  pointer-events: auto;
+}
+
+/* Workflow panels — scroll without visible scrollbar */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Audit Log — horizontal card row scrolls without visible scrollbar */
+[data-audit-log] .audit-history-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+[data-audit-log] .audit-history-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Audit Log — attribute list scrolls without visible scrollbar */
+[data-audit-log] .audit-attributes-scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+[data-audit-log] .audit-attributes-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+[data-audit-log] .audit-section-divider {
+  margin: 0.625rem 0.5rem 0.375rem;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(148, 163, 184, 0.45) 12%,
+    rgba(148, 163, 184, 0.45) 88%,
+    transparent 100%
+  );
+}
+
+[data-audit-log] .audit-section-label {
+  margin: 0 0 0.375rem;
+  padding: 0 0.125rem;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+/* Login page — cinematic volumetric fog overlay */
+@keyframes login-fog-drift-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.28;
+  }
+  18% {
+    transform: translate3d(12vw, -4vh, 0) scale(1.12);
+    opacity: 0.52;
+  }
+  42% {
+    transform: translate3d(-8vw, 6vh, 0) scale(0.92);
+    opacity: 0.36;
+  }
+  67% {
+    transform: translate3d(6vw, 3vh, 0) scale(1.06);
+    opacity: 0.48;
+  }
+  85% {
+    transform: translate3d(-10vw, -2vh, 0) scale(1.02);
+    opacity: 0.32;
+  }
+}
+
+@keyframes login-fog-drift-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.05);
+    opacity: 0.22;
+  }
+  22% {
+    transform: translate3d(-14vw, 5vh, 0) scale(0.88);
+    opacity: 0.44;
+  }
+  48% {
+    transform: translate3d(9vw, -6vh, 0) scale(1.14);
+    opacity: 0.38;
+  }
+  74% {
+    transform: translate3d(-5vw, 8vh, 0) scale(1);
+    opacity: 0.5;
+  }
+}
+
+@keyframes login-fog-drift-c {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(0.95);
+    opacity: 0.34;
+  }
+  30% {
+    transform: translate3d(16vw, 7vh, 0) scale(1.08);
+    opacity: 0.2;
+  }
+  55% {
+    transform: translate3d(-12vw, -5vh, 0) scale(1.16);
+    opacity: 0.46;
+  }
+  80% {
+    transform: translate3d(4vw, 10vh, 0) scale(0.9);
+    opacity: 0.3;
+  }
+}
+
+@keyframes login-fog-wisp {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scaleX(1);
+    opacity: 0.12;
+  }
+  33% {
+    transform: translate3d(20vw, -3vh, 0) scaleX(1.35);
+    opacity: 0.28;
+  }
+  66% {
+    transform: translate3d(-18vw, 4vh, 0) scaleX(0.85);
+    opacity: 0.18;
+  }
+}
+
+.login-fog {
+  isolation: isolate;
+}
+
+.login-fog__base {
+  position: absolute;
+  inset: -10%;
+  background:
+    radial-gradient(ellipse 90% 55% at 25% 60%, rgba(248, 250, 252, 0.38) 0%, transparent 62%),
+    radial-gradient(ellipse 70% 45% at 72% 35%, rgba(241, 245, 249, 0.32) 0%, transparent 58%),
+    radial-gradient(ellipse 55% 40% at 48% 78%, rgba(255, 255, 255, 0.22) 0%, transparent 55%);
+  filter: blur(28px);
+  opacity: 0.85;
+  animation: login-fog-drift-c 68s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.login-fog__patch {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(52px);
+  mix-blend-mode: soft-light;
+  will-change: transform, opacity;
+}
+
+.login-fog__patch--1 {
+  top: -8%;
+  left: -6%;
+  width: 58%;
+  height: 48%;
+  background: radial-gradient(ellipse at 42% 48%, rgba(255, 255, 255, 0.62) 0%, rgba(255, 255, 255, 0.18) 42%, transparent 72%);
+  animation: login-fog-drift-a 52s ease-in-out infinite;
+}
+
+.login-fog__patch--2 {
+  top: 18%;
+  right: -12%;
+  width: 52%;
+  height: 44%;
+  background: radial-gradient(ellipse at 55% 40%, rgba(248, 250, 252, 0.55) 0%, rgba(226, 232, 240, 0.14) 48%, transparent 74%);
+  animation: login-fog-drift-b 61s ease-in-out infinite;
+  animation-delay: -14s;
+}
+
+.login-fog__patch--3 {
+  bottom: -6%;
+  left: 8%;
+  width: 64%;
+  height: 50%;
+  background: radial-gradient(ellipse at 38% 55%, rgba(255, 255, 255, 0.5) 0%, rgba(241, 245, 249, 0.12) 45%, transparent 70%);
+  animation: login-fog-drift-c 47s ease-in-out infinite;
+  animation-delay: -22s;
+}
+
+.login-fog__patch--4 {
+  top: 32%;
+  left: 22%;
+  width: 46%;
+  height: 38%;
+  background: radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 0.48) 0%, transparent 68%);
+  filter: blur(68px);
+  animation: login-fog-drift-b 39s ease-in-out infinite;
+  animation-delay: -8s;
+}
+
+.login-fog__patch--5 {
+  top: 8%;
+  left: 38%;
+  width: 40%;
+  height: 34%;
+  background: radial-gradient(ellipse at 60% 45%, rgba(248, 250, 252, 0.42) 0%, transparent 65%);
+  filter: blur(44px);
+  animation: login-fog-drift-a 44s ease-in-out infinite reverse;
+  animation-delay: -31s;
+}
+
+.login-fog__patch--6 {
+  bottom: 12%;
+  right: 6%;
+  width: 50%;
+  height: 42%;
+  background: radial-gradient(ellipse at 45% 50%, rgba(255, 255, 255, 0.4) 0%, rgba(226, 232, 240, 0.1) 50%, transparent 72%);
+  filter: blur(56px);
+  animation: login-fog-drift-c 55s ease-in-out infinite reverse;
+  animation-delay: -19s;
+}
+
+.login-fog__wisp {
+  position: absolute;
+  height: 22%;
+  filter: blur(36px);
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 28%,
+    rgba(248, 250, 252, 0.22) 52%,
+    transparent 100%
+  );
+  mix-blend-mode: screen;
+  will-change: transform, opacity;
+}
+
+.login-fog__wisp--1 {
+  top: 42%;
+  left: -20%;
+  width: 72%;
+  animation: login-fog-wisp 38s ease-in-out infinite;
+}
+
+.login-fog__wisp--2 {
+  top: 62%;
+  left: -15%;
+  width: 65%;
+  animation: login-fog-wisp 46s ease-in-out infinite reverse;
+  animation-delay: -12s;
+}
+
+.login-fog__wisp--3 {
+  top: 24%;
+  left: -25%;
+  width: 58%;
+  opacity: 0.85;
+  animation: login-fog-wisp 52s ease-in-out infinite;
+  animation-delay: -27s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-fog__base,
+  .login-fog__patch,
+  .login-fog__wisp {
+    animation: none;
+  }
+}
