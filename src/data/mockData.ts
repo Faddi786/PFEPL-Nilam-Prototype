@@ -203,12 +203,12 @@ const LAYER_GROUPS: LayerGroup[] = [
   },
   {
     id: "admin",
-    label: "Administrative",
+    label: "Administrative Boundaries",
     layers: [
-      { id: "region", label: "Region", visible: false, opacity: 0.4 },
-      { id: "taluk", label: "Taluk", visible: false, opacity: 0.45 },
-      { id: "village", label: "Village", visible: false, opacity: 0.45 },
-      { id: "ward", label: "Ward", visible: false, opacity: 0.4 },
+      { id: "adminState", label: "Maharashtra State Boundary", visible: false, opacity: 1 },
+      { id: "adminDistrict", label: "District Boundary", visible: false, opacity: 1 },
+      { id: "adminTaluka", label: "Taluka Boundary", visible: false, opacity: 1 },
+      { id: "adminVillage", label: "Village Boundary", visible: false, opacity: 1 },
     ],
   },
   {
@@ -326,6 +326,14 @@ export function variancePctForBand(band: ParcelRecord["varianceBand"], index: nu
   if (band === "red") return Number((3.7 + (index % 8) * 0.12).toFixed(2));
   if (band === "amber") return Number((2.3 + (index % 6) * 0.18).toFixed(2));
   return Number((0.6 + (index % 7) * 0.22).toFixed(2));
+}
+
+/** Deterministic workflow status — ~20% mutation pending, ~10% disputed (OSM templates are all "active"). */
+export function parcelStatusForIndex(parcelIndex: number): "active" | "mutation_pending" | "disputed" {
+  const mod = parcelIndex % 10;
+  if (mod === 8 || mod === 9) return "mutation_pending";
+  if (mod === 7) return "disputed";
+  return "active";
 }
 
 function buildDgpsPointsOnParcels(parcels: Feature[], config: RegionConfig): Feature[] {
@@ -533,9 +541,7 @@ function enrichParcelRecord(
   const variancePct = Number((rng() * 4.8).toFixed(2));
   const varianceBand: ParcelRecord["varianceBand"] =
     variancePct > 3.6 ? "red" : variancePct > 2.2 ? "amber" : "green";
-  const statusRoll = rng();
-  const status =
-    base.status ?? (statusRoll < 0.82 ? "active" : statusRoll < 0.92 ? "mutation_pending" : "disputed");
+  const status = parcelStatusForIndex(parcelIndex);
   const classification = base.classification ?? (rng() > 0.58 ? "Punjai" : "Nanjai");
 
   return {
@@ -841,31 +847,7 @@ export function rebuildRegionDatasetWithParcels(
   const midY = (minY + maxY) / 2;
   const width = maxX - minX;
   const height = maxY - minY;
-
-  const regionPoly = toPolygon(
-    bboxPolygon(minX - width * 0.04, minY - height * 0.04, maxX + width * 0.04, maxY + height * 0.04),
-    { name: `${config.label} Region`, level: "region" },
-  );
-
-  const talukPolys = config.taluks.map((name, idx) => {
-    const tMinX = idx % 2 === 0 ? minX : midX;
-    const tMaxX = idx % 2 === 0 ? midX : maxX;
-    return toPolygon(bboxPolygon(tMinX, minY, tMaxX, maxY), { name, level: "taluk" });
-  });
-
-  const villageFeatures = config.villages.map((name, idx) => {
-    const vBand = idx / config.villages.length;
-    const vMinY = minY + height * vBand;
-    const vMaxY = minY + height * ((idx + 1) / config.villages.length);
-    return toPolygon(bboxPolygon(minX, vMinY, maxX, vMaxY), { name, level: "village" });
-  });
-
-  const wardPolys = [
-    toPolygon(bboxPolygon(minX, minY, midX, midY), { name: "Ward 1", level: "ward" }),
-    toPolygon(bboxPolygon(midX, minY, maxX, midY), { name: "Ward 2", level: "ward" }),
-    toPolygon(bboxPolygon(minX, midY, midX, maxY), { name: "Ward 3", level: "ward" }),
-    toPolygon(bboxPolygon(midX, midY, maxX, maxY), { name: "Ward 4", level: "ward" }),
-  ];
+  const emptyCollection: FeatureCollection = { type: "FeatureCollection", features: [] };
 
   const fmbFeatures = Array.from({ length: 4 }).map((_, fm) => {
     const sx = minX + (width * fm) / 4;
@@ -905,10 +887,10 @@ export function rebuildRegionDatasetWithParcels(
     parcelAttrs,
     parcels: Object.values(parcelAttrs),
     geojson: {
-      region: { type: "FeatureCollection", features: [regionPoly] },
-      taluk: { type: "FeatureCollection", features: talukPolys },
-      village: { type: "FeatureCollection", features: villageFeatures },
-      ward: { type: "FeatureCollection", features: wardPolys },
+      region: emptyCollection,
+      taluk: emptyCollection,
+      village: emptyCollection,
+      ward: emptyCollection,
       fmb: { type: "FeatureCollection", features: fmbFeatures },
       fmbChains,
       parcels: { type: "FeatureCollection", features: parcelFeatures },

@@ -16,6 +16,12 @@
     "hideHistory": "வரலாறு மறை",
     "showDocuments": "ஆவணங்கள் காட்டு",
     "walk3D": "3D நடை",
+    "export": {
+      "label": "ஏற்றுமதி",
+      "documents": "ஆவணங்கள்",
+      "vector": "வெக்டர்",
+      "raster": "ராஸ்டர்"
+    },
     "lockCard": "அட்டை பூட்டு",
     "unlockCard": "அட்டை திற",
     "turnOnTooltip": "குறிப்பு இயக்கு",
@@ -51,10 +57,8 @@
     "parcelLabel": "நிலத் துண்டு {{survey}} / ULPIN {{ulpin}}",
     "close": "3D நடை மூடு",
     "loading": "Street View ஏற்றுகிறது…",
-    "streetViewHint": "Street View — மூழ்கும் நடை",
     "demoLocation": "டெமோ இடம்: {{location}}",
     "iframeTitle": "Street View நடை — நிலத் துண்டு {{survey}}",
-    "demoNote": "Street View கவரேஜ் உள்ள டெமோ இடத்தில் தரைமட்ட நடை காட்டப்படுகிறது.",
     "openGoogleMaps": "Google Maps-ல் திற"
   },
   "workspace": {
@@ -95,15 +99,13 @@
     "tabs": {
       "overview": "கண்ணோட்டம்",
       "ownership": "உரிமை",
-      "documents": "ஆவணங்கள்",
+      "nilamagal": "Nilamagal",
+      "collabland": "Collabland",
+      "ulpin-lineage": "ULPIN வரலாறு",
       "images": "படங்கள்",
-      "map": "வரைபடம்",
-      "survey": "சர்வே",
-      "mutations": "மாற்றங்கள்",
-      "agriculture": "விவசாயம்",
+      "agristack": "Agristack",
       "analytics": "பகுப்பாய்வு",
-      "downloads": "பதிவிறக்கங்கள்",
-      "audit-log": "தணிக்கை பதிவு"
+      "documents": "ஆவணங்கள்"
     },
     "fields": {
       "surveyNo": "சர்வே எண்",

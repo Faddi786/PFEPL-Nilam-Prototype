@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "generate:anomaly-export": "node scripts/generate-anomaly-export.mjs",
     "generate:nilai-export": "node scripts/generate-nilai-export.mjs",
-    "generate:parcel-geojson": "node scripts/convert-shapefiles.mjs"
+    "generate:parcel-geojson": "node scripts/convert-shapefiles.mjs",
+    "generate:admin-boundaries": "node scripts/convert-admin-boundaries.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.1",

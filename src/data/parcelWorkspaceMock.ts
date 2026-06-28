@@ -61,29 +61,164 @@ export const DOCUMENT_TYPES: DocumentTypeOption[] = [
 export type WorkspaceTab =
   | "overview"
   | "ownership"
-  | "documents"
+  | "nilamagal"
+  | "collabland"
+  | "ulpin-lineage"
   | "images"
-  | "map"
-  | "survey"
-  | "mutations"
-  | "agriculture"
+  | "agristack"
   | "analytics"
-  | "downloads"
-  | "audit-log";
+  | "documents";
 
 export const WORKSPACE_TABS: Array<{ id: WorkspaceTab; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "ownership", label: "Ownership" },
-  { id: "documents", label: "Documents" },
+  { id: "nilamagal", label: "Nilamagal" },
+  { id: "collabland", label: "Collabland" },
+  { id: "ulpin-lineage", label: "ULPIN Lineage" },
+  { id: "agristack", label: "Agristack" },
   { id: "images", label: "Images" },
-  { id: "map", label: "Map" },
-  { id: "survey", label: "Survey" },
-  { id: "mutations", label: "Mutations" },
-  { id: "agriculture", label: "Agriculture" },
   { id: "analytics", label: "Analytics" },
-  { id: "downloads", label: "Downloads" },
-  { id: "audit-log", label: "Audit Log" },
+  { id: "documents", label: "Documents" },
 ];
+
+export type ParcelDocumentAsset = {
+  id: string;
+  label: string;
+  description: string;
+  kind: "pdf" | "image";
+  src: string;
+  sourceNote?: string;
+};
+
+/** Maharashtra / Puducherry land-record documents for the Documents tab preview panel. */
+export const PARCEL_DOCUMENT_ASSETS: ParcelDocumentAsset[] = [
+  {
+    id: "ror-7-12",
+    label: "Record of Rights (7/12 Extract)",
+    description: "Saath Baara Utara — ownership, classification & crop register",
+    kind: "pdf",
+    src: "/assets/documents/ror-7-12-extract.pdf",
+    sourceNote: "Sample: ACRS proceedings citing RoR & FMB (public research PDF)",
+  },
+  {
+    id: "patta",
+    label: "Patta Certificate",
+    description: "Puducherry / Tamil Nadu patta extract",
+    kind: "pdf",
+    src: "/assets/documents/cadastral-mapping-guide.pdf",
+    sourceNote: "Sample: KSCST cadastral mapping guidelines (open government PDF)",
+  },
+  {
+    id: "mutation-order",
+    label: "Mutation Order",
+    description: "Revenue mutation entry — sale / inheritance",
+    kind: "pdf",
+    src: "/assets/documents/mutation-order-sample.pdf",
+    sourceNote: "Sample: BhuNaksha FMB digitization guide (NIC public PDF)",
+  },
+  {
+    id: "fmb-sketch",
+    label: "FMB Survey Sketch",
+    description: "Field Measurement Book — sub-division diagram",
+    kind: "pdf",
+    src: "/assets/documents/fmb-bhunaksha-guide.pdf",
+    sourceNote: "Sample: BhuNaksha FMB/Tippon digitization (bhunaksha.nic.in)",
+  },
+  {
+    id: "village-map",
+    label: "Village Cadastral Map",
+    description: "Geo-referenced village parcel mosaic",
+    kind: "pdf",
+    src: "/assets/documents/cadastral-mapping-guide.pdf",
+    sourceNote: "Sample: VIS cadastral mapping guidelines (KSCST)",
+  },
+  {
+    id: "sale-deed",
+    label: "Registered Sale Deed",
+    description: "Sub-registrar registered transfer deed",
+    kind: "pdf",
+    src: "/assets/documents/collabland-fmb-study.pdf",
+    sourceNote: "Sample: CollabLand FMB study proceedings (ACRS public PDF)",
+  },
+  {
+    id: "encumbrance",
+    label: "Encumbrance Certificate",
+    description: "Nil encumbrance / charge certificate",
+    kind: "pdf",
+    src: "/assets/documents/ror-7-12-extract.pdf",
+    sourceNote: "Demo placeholder — same public RoR sample",
+  },
+];
+
+export type WorkspaceImageAsset = {
+  id: string;
+  label: string;
+  category: string;
+  src: string;
+};
+
+export const WORKSPACE_IMAGE_ASSETS: WorkspaceImageAsset[] = [
+  { id: "sat-2024", label: "Satellite 2024", category: "Satellite imagery", src: "/assets/documents/satellite-landsat.jpg" },
+  { id: "sat-2020", label: "Satellite 2020", category: "Satellite imagery", src: "/assets/documents/satellite-landsat.jpg" },
+  { id: "cadastral", label: "Cadastral overlay", category: "Survey sketch", src: "/assets/documents/cadastral-map.jpg" },
+  { id: "fmb-field", label: "FMB field boundary", category: "Survey sketch", src: "/assets/documents/survey-boundary.jpg" },
+  { id: "site-inspection", label: "Site inspection", category: "Field photos", src: "/assets/documents/survey-boundary.jpg" },
+  { id: "crop-paddy", label: "Kharif crop — Paddy", category: "Agristack", src: "/assets/documents/paddy-field.jpg" },
+  { id: "crop-sugarcane", label: "Rabi crop — Sugarcane", category: "Agristack", src: "/assets/documents/farmer-field.jpg" },
+  { id: "farmer-portrait", label: "Cultivator verification", category: "Agristack", src: "/assets/documents/farmer-field.jpg" },
+];
+
+export type NilamagalRecord = {
+  syncStatus: "live" | "stale" | "pending";
+  lastSyncedAt: string;
+  rows: Array<{ field: string; value: string; dbColumn: string }>;
+};
+
+export type CollablandGeometry = {
+  crs: string;
+  areaSqM: number;
+  perimeterM: number;
+  vertexCount: number;
+  coordinates: Array<{ seq: number; easting: string; northing: string; lat: string; lng: string }>;
+  boundaryStats: Array<{ label: string; value: string }>;
+};
+
+export type UlpinLineageEvent = {
+  date: string;
+  ulpin: string;
+  action: string;
+  linkedParcel: string;
+  verification: "verified" | "pending" | "superseded";
+  source: string;
+};
+
+export type UlpinLineageNode = {
+  id: string;
+  ulpin: string;
+  label: string;
+  subtitle?: string;
+  kind: "ancestor" | "origin" | "split" | "merge" | "current";
+  eventDate?: string;
+  eventAction?: string;
+  accent?: "slate" | "blue" | "green";
+  onLineagePath?: boolean;
+  refNo?: number;
+};
+
+export type UlpinLineageLevel = {
+  id: string;
+  label: string;
+  nodes: UlpinLineageNode[];
+  edges: Array<{ from: string; to: string }>;
+};
+
+export type UlpinLineageTreeData = {
+  ancestorParent?: UlpinLineageNode;
+  levels: UlpinLineageLevel[];
+  rootId: string;
+  binaryChildren: Record<string, { left?: string; right?: string }>;
+  lineagePathIds: string[];
+};
 
 export type TimelineEvent = {
   year: number;
@@ -384,4 +519,232 @@ export function summarizeAuditHistory(history: AuditHistoryEntry[]): Array<{ ver
       timestamp: entry.timestamp,
     })),
   ];
+}
+
+export function generateNilamagalData(parcel: ParcelRecord): NilamagalRecord {
+  const surveyLabel = `${parcel.surveyNo}${parcel.subDiv ? `/${parcel.subDiv}` : ""}`;
+  const areaHa = (parcel.areaSqM / 10000).toFixed(4);
+  const areaAres = (parcel.areaSqM / 100).toFixed(2);
+
+  return {
+    syncStatus: "live",
+    lastSyncedAt: "2026-06-27 14:32:08 IST",
+    rows: [
+      { field: "DISTRICT_CD", value: parcel.districtCode, dbColumn: "VARCHAR(4)" },
+      { field: "TALUK_NM", value: parcel.taluk, dbColumn: "VARCHAR(64)" },
+      { field: "VILLAGE_NM", value: parcel.village, dbColumn: "VARCHAR(128)" },
+      { field: "SURVEY_NO", value: surveyLabel, dbColumn: "VARCHAR(16)" },
+      { field: "PATTA_NO", value: parcel.pattaNo, dbColumn: "VARCHAR(24)" },
+      { field: "OWNER_NM", value: parcel.ownerMasked, dbColumn: "VARCHAR(256)" },
+      { field: "CLASS_CD", value: parcel.classification, dbColumn: "CHAR(2)" },
+      { field: "LAND_USE", value: parcel.landUse, dbColumn: "VARCHAR(32)" },
+      { field: "EXTENT_HA", value: areaHa, dbColumn: "DECIMAL(10,4)" },
+      { field: "EXTENT_ARES", value: areaAres, dbColumn: "DECIMAL(10,2)" },
+      { field: "HOLDING_TYP", value: parcel.holdingType, dbColumn: "VARCHAR(24)" },
+      { field: "OCCUPANCY", value: parcel.occupancyType || "Owner", dbColumn: "VARCHAR(24)" },
+      { field: "MUTATION_REF", value: parcel.mutationRef, dbColumn: "VARCHAR(32)" },
+      { field: "ENCUMBRANCE", value: parcel.encumbrance, dbColumn: "VARCHAR(64)" },
+      { field: "CROP_SEASON", value: parcel.cropType || "Paddy", dbColumn: "VARCHAR(32)" },
+      { field: "SOIL_TYPE", value: parcel.soilType, dbColumn: "VARCHAR(24)" },
+      { field: "REV_BLOCK", value: parcel.revenueBlock || parcel.blockNo, dbColumn: "VARCHAR(8)" },
+      { field: "FMB_SHEET", value: parcel.fmbSheet, dbColumn: "VARCHAR(16)" },
+      { field: "ULPIN", value: parcel.ulpin, dbColumn: "CHAR(26)" },
+      { field: "SYNC_SRC", value: "NILAMAGAL_LIVE", dbColumn: "VARCHAR(16)" },
+    ],
+  };
+}
+
+function ringPerimeter(ring: number[][]): number {
+  let total = 0;
+  for (let i = 0; i < ring.length - 1; i += 1) {
+    const [lng1, lat1] = ring[i];
+    const [lng2, lat2] = ring[i + 1];
+    const dx = (lng2 - lng1) * 111320 * Math.cos(((lat1 + lat2) / 2) * (Math.PI / 180));
+    const dy = (lat2 - lat1) * 110540;
+    total += Math.sqrt(dx * dx + dy * dy);
+  }
+  return total;
+}
+
+export function generateCollablandData(parcel: ParcelRecord, geometry: GeoJSON.Polygon): CollablandGeometry {
+  const ring = geometry.coordinates[0];
+  const perimeterM = ringPerimeter(ring);
+
+  return {
+    crs: "EPSG:4326 (WGS84) → UTM 44N",
+    areaSqM: parcel.areaSqM,
+    perimeterM: Math.round(perimeterM * 10) / 10,
+    vertexCount: ring.length - 1,
+    coordinates: ring.slice(0, -1).map((coord, index) => ({
+      seq: index + 1,
+      easting: (coord[0] * 111320).toFixed(2),
+      northing: (coord[1] * 110540).toFixed(2),
+      lng: coord[0].toFixed(6),
+      lat: coord[1].toFixed(6),
+    })),
+    boundaryStats: [
+      { label: "Survey No.", value: `${parcel.surveyNo}/${parcel.subDiv}` },
+      { label: "FMB Sheet", value: parcel.fmbSheet },
+      { label: "Block No.", value: parcel.blockNo },
+      { label: "GPS accuracy", value: `${parcel.gpsAccuracy} m` },
+      { label: "Boundary type", value: parcel.boundaryType || "Stone & hedge" },
+      { label: "North adjacency", value: parcel.northBoundary || "Village road" },
+      { label: "East adjacency", value: parcel.eastBoundary || "Vacant plot" },
+      { label: "GIS variance", value: `${parcel.variancePct}%` },
+    ],
+  };
+}
+
+export function generateUlpinLineageTree(parcel: ParcelRecord): UlpinLineageTreeData {
+  const districtPrefix = parcel.ulpin.replace(/\D/g, "").slice(0, 6) || "341200";
+  const surveyLabel = `${parcel.surveyNo}${parcel.subDiv ? `/${parcel.subDiv}` : ""}`;
+  const lineagePathIds = ["node-7", "node-3", "node-5", "node-6"];
+  const pathSet = new Set(lineagePathIds);
+
+  function ulpinForRef(ref: number): string {
+    if (ref === 6) return parcel.ulpin;
+    return `${districtPrefix}${String(ref).padStart(8, "0")}`;
+  }
+
+  function makeNode(
+    id: string,
+    ref: number,
+    label: string,
+    kind: UlpinLineageNode["kind"],
+    eventAction: string,
+    eventDate?: string,
+  ): UlpinLineageNode {
+    return {
+      id,
+      refNo: ref,
+      ulpin: ulpinForRef(ref),
+      label,
+      subtitle: surveyLabel,
+      kind,
+      eventDate,
+      eventAction,
+      onLineagePath: pathSet.has(id),
+      accent: pathSet.has(id) ? "green" : "blue",
+    };
+  }
+
+  const node7 = makeNode("node-7", 7, "Parent holding — sole owner", "origin", "Original survey & registration", parcel.registeredOn || "1985-04-12");
+  const node3 = makeNode("node-3", 3, "First partition — left share", "split", "Family partition deed", "2019-03-22");
+  const node11 = makeNode("node-11", 11, "First partition — right share", "split", "Family partition deed", "2019-03-22");
+  const node1 = makeNode("node-1", 1, "Sub-partition — left branch", "split", "Subdivision deed", "2020-01-14");
+  const node5 = makeNode("node-5", 5, "Sub-partition — right branch", "split", "Subdivision deed", "2020-01-14");
+  const node9 = makeNode("node-9", 9, "Sub-partition — left branch", "split", "Subdivision deed", "2020-06-08");
+  const node13 = makeNode("node-13", 13, "Sub-partition — right branch", "split", "Subdivision deed", "2020-06-08");
+  const node4 = makeNode("node-4", 4, "Split parcel — left share", "split", "Further subdivision", "2021-04-19");
+  const node6 = makeNode("node-6", 6, "Current parcel — GIS aligned", "current", "ULPIN re-issued after subdivision", "2023-11-05");
+  const node8 = makeNode("node-8", 8, "Split parcel — sole child", "split", "Further subdivision", "2021-09-02");
+  const node12 = makeNode("node-12", 12, "Split parcel — left share", "split", "Further subdivision", "2022-02-11");
+  const node14 = makeNode("node-14", 14, "Split parcel — right share", "split", "Further subdivision", "2022-02-11");
+
+
+  const binaryChildren: UlpinLineageTreeData["binaryChildren"] = {
+    "node-7": { left: "node-3", right: "node-11" },
+    "node-3": { left: "node-1", right: "node-5" },
+    "node-11": { left: "node-9", right: "node-13" },
+    "node-5": { left: "node-4", right: "node-6" },
+    "node-9": { left: "node-8" },
+    "node-13": { left: "node-12", right: "node-14" },
+  };
+
+  const edges = [
+    { from: "node-7", to: "node-3" },
+    { from: "node-7", to: "node-11" },
+    { from: "node-3", to: "node-1" },
+    { from: "node-3", to: "node-5" },
+    { from: "node-11", to: "node-9" },
+    { from: "node-11", to: "node-13" },
+    { from: "node-5", to: "node-4" },
+    { from: "node-5", to: "node-6" },
+    { from: "node-9", to: "node-8" },
+    { from: "node-13", to: "node-12" },
+    { from: "node-13", to: "node-14" },
+  ];
+
+  return {
+    rootId: "node-7",
+    binaryChildren,
+    lineagePathIds,
+    levels: [
+      {
+        id: "level-root",
+        label: "Parent parcel (pre-partition)",
+        nodes: [node7],
+        edges: edges.filter((e) => e.from === "node-7"),
+      },
+      {
+        id: "level-1",
+        label: "First partition",
+        nodes: [node3, node11],
+        edges: edges.filter((e) => e.from === "node-3" || e.from === "node-11"),
+      },
+      {
+        id: "level-2",
+        label: "Second partition",
+        nodes: [node1, node5, node9, node13],
+        edges: edges.filter((e) => e.from === "node-5" || e.from === "node-9" || e.from === "node-13"),
+      },
+      {
+        id: "level-3",
+        label: "Third partition — current parcel",
+        nodes: [node4, node6, node8, node12, node14],
+        edges: [],
+      },
+    ],
+  };
+}
+
+export function generateUlpinLineage(parcel: ParcelRecord, auditHistory: AuditHistoryEntry[]): UlpinLineageEvent[] {
+  const surveyLabel = `${parcel.surveyNo}${parcel.subDiv ? `/${parcel.subDiv}` : ""}`;
+  const events: UlpinLineageEvent[] = [
+    {
+      date: parcel.registeredOn || "2012-08-14",
+      ulpin: "—",
+      action: "Legacy survey record",
+      linkedParcel: surveyLabel,
+      verification: "superseded",
+      source: parcel.source || "Nilamagal",
+    },
+    {
+      date: "2019-03-22",
+      ulpin: `IN-${parcel.districtCode}-LEG-${parcel.surveyNo}`,
+      action: "ULPIN assigned (NLRMP Phase I)",
+      linkedParcel: surveyLabel,
+      verification: "superseded",
+      source: "ULPIN Registry",
+    },
+    {
+      date: "2023-11-05",
+      ulpin: parcel.ulpin,
+      action: "ULPIN re-issued after subdivision",
+      linkedParcel: `${parcel.surveyNo}/${parcel.subDiv}`,
+      verification: "verified",
+      source: "DOSLR Portal",
+    },
+    {
+      date: "2026-01-18",
+      ulpin: parcel.ulpin,
+      action: "Boundary correction — geometry sync",
+      linkedParcel: parcel.ulpin,
+      verification: "verified",
+      source: "Collabland",
+    },
+  ];
+
+  auditHistory.slice(0, 2).forEach((entry, index) => {
+    events.push({
+      date: entry.timestamp.split(" ")[0] || entry.timestamp,
+      ulpin: parcel.ulpin,
+      action: entry.label,
+      linkedParcel: parcel.id,
+      verification: index === 0 ? "verified" : "pending",
+      source: "Audit workflow",
+    });
+  });
+
+  return events;
 }

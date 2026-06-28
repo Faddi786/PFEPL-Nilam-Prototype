@@ -5,6 +5,7 @@ import {
   Box,
   Check,
   ChevronRight,
+  Download,
   EyeOff,
   FileText,
   Globe,
@@ -29,7 +30,16 @@ type Props = {
 };
 
 const HOVER_CLOSE_DELAY_MS = 180;
-const LANG_SUBMENU_CLOSE_DELAY_MS = 150;
+const SUBMENU_CLOSE_DELAY_MS = 150;
+
+const EXPORT_FORMAT_GROUPS = [
+  { labelKey: "audit.export.documents", formats: ["PDF", "CSV", "Excel"] },
+  {
+    labelKey: "audit.export.vector",
+    formats: ["GeoJSON", "Shapefile", "GeoPackage", "KML", "DXF"],
+  },
+  { labelKey: "audit.export.raster", formats: ["TIFF", "COG"] },
+] as const;
 
 export default function AuditCardMenu({
   historyVisible,
@@ -44,11 +54,13 @@ export default function AuditCardMenu({
   const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
   const [langSubmenuOpen, setLangSubmenuOpen] = useState(false);
+  const [exportSubmenuOpen, setExportSubmenuOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<number | null>(null);
   const langSubmenuTimerRef = useRef<number | null>(null);
+  const exportSubmenuTimerRef = useRef<number | null>(null);
 
   function clearCloseTimer() {
     if (closeTimerRef.current !== null) {
@@ -83,7 +95,27 @@ export default function AuditCardMenu({
     clearLangSubmenuTimer();
     langSubmenuTimerRef.current = window.setTimeout(
       () => setLangSubmenuOpen(false),
-      LANG_SUBMENU_CLOSE_DELAY_MS,
+      SUBMENU_CLOSE_DELAY_MS,
+    );
+  }
+
+  function clearExportSubmenuTimer() {
+    if (exportSubmenuTimerRef.current !== null) {
+      window.clearTimeout(exportSubmenuTimerRef.current);
+      exportSubmenuTimerRef.current = null;
+    }
+  }
+
+  function openExportSubmenu() {
+    clearExportSubmenuTimer();
+    setExportSubmenuOpen(true);
+  }
+
+  function scheduleCloseExportSubmenu() {
+    clearExportSubmenuTimer();
+    exportSubmenuTimerRef.current = window.setTimeout(
+      () => setExportSubmenuOpen(false),
+      SUBMENU_CLOSE_DELAY_MS,
     );
   }
 
@@ -91,11 +123,15 @@ export default function AuditCardMenu({
     return () => {
       clearCloseTimer();
       clearLangSubmenuTimer();
+      clearExportSubmenuTimer();
     };
   }, []);
 
   useEffect(() => {
-    if (!open) setLangSubmenuOpen(false);
+    if (!open) {
+      setLangSubmenuOpen(false);
+      setExportSubmenuOpen(false);
+    }
   }, [open]);
 
   useEffect(() => {
@@ -230,6 +266,50 @@ export default function AuditCardMenu({
                   {t("audit.walk3D")}
                 </button>
               ) : null}
+              <div
+                className="relative"
+                onMouseEnter={openExportSubmenu}
+                onMouseLeave={scheduleCloseExportSubmenu}
+              >
+                <div
+                  role="menuitem"
+                  aria-haspopup="menu"
+                  aria-expanded={exportSubmenuOpen}
+                  className="flex w-full cursor-default items-center gap-2 px-3 py-1.5 text-left text-[10px] leading-4 text-slate-700 transition hover:bg-slate-50"
+                >
+                  <Download className="h-3 w-3 shrink-0 text-slate-500" />
+                  <span className="flex-1">{t("audit.export.label")}</span>
+                  <ChevronRight className="h-3 w-3 shrink-0 text-slate-400" />
+                </div>
+                {exportSubmenuOpen ? (
+                  <div
+                    role="menu"
+                    className="absolute left-full top-0 z-10 ml-1 min-w-[140px] overflow-hidden rounded-xl border border-slate-200/90 bg-white/98 py-1 shadow-lg backdrop-blur-md"
+                    onMouseEnter={openExportSubmenu}
+                    onMouseLeave={scheduleCloseExportSubmenu}
+                  >
+                    {EXPORT_FORMAT_GROUPS.map((group, groupIndex) => (
+                      <div key={group.labelKey}>
+                        {groupIndex > 0 ? (
+                          <div className="my-1 border-t border-slate-100" role="separator" />
+                        ) : null}
+                        <div className="px-3 py-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-400">
+                          {t(group.labelKey)}
+                        </div>
+                        {group.formats.map((format) => (
+                          <div
+                            key={format}
+                            role="menuitem"
+                            className="flex w-full cursor-default items-center px-3 py-1.5 text-left text-[10px] leading-4 text-slate-700"
+                          >
+                            {format}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <div className="my-1 border-t border-slate-100" role="separator" />
               <div
                 className="relative"

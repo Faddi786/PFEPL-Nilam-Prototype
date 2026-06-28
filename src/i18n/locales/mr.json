@@ -16,6 +16,12 @@
     "hideHistory": "इतिहास लपवा",
     "showDocuments": "दस्तऐवज दाखवा",
     "walk3D": "3D वॉक",
+    "export": {
+      "label": "निर्यात",
+      "documents": "दस्तऐवज",
+      "vector": "वेक्टर",
+      "raster": "रास्टर"
+    },
     "lockCard": "कार्ड लॉक करा",
     "unlockCard": "कार्ड अनलॉक करा",
     "turnOnTooltip": "टूलटिप चालू करा",
@@ -51,10 +57,8 @@
     "parcelLabel": "पार्सल {{survey}} / ULPIN {{ulpin}}",
     "close": "3D वॉक बंद करा",
     "loading": "Street View लोड होत आहे…",
-    "streetViewHint": "Street View — इमर्सिव वॉक",
     "demoLocation": "डेमो स्थान: {{location}}",
     "iframeTitle": "Street View वॉक — पार्सल {{survey}}",
-    "demoNote": "Street View कव्हरेज असलेल्या डेमो स्थानी जमिनीपातळीवरील वॉक दाखवला.",
     "openGoogleMaps": "Google Maps मध्ये उघडा"
   },
   "workspace": {
@@ -95,15 +99,13 @@
     "tabs": {
       "overview": "आढावा",
       "ownership": "मालकी",
-      "documents": "दस्तऐवज",
+      "nilamagal": "Nilamagal",
+      "collabland": "Collabland",
+      "ulpin-lineage": "ULPIN वंशावली",
       "images": "प्रतिमा",
-      "map": "नकाशा",
-      "survey": "सर्वे",
-      "mutations": "म्युटेशन",
-      "agriculture": "शेती",
+      "agristack": "Agristack",
       "analytics": "विश्लेषण",
-      "downloads": "डाउनलोड",
-      "audit-log": "ऑडिट लॉग"
+      "documents": "दस्तऐवज"
     },
     "fields": {
       "surveyNo": "सर्वे क्र.",

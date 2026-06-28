@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import centroid from "@turf/centroid";
-import { ExternalLink, Loader2, MapPin, Navigation, X } from "lucide-react";
+import { ExternalLink, Loader2, MapPin, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ParcelRecord } from "../../data/mockData";
 import {
@@ -124,13 +124,6 @@ export default function Parcel3DWalkModal({ parcel, geometry, onClose }: Props) 
                   </div>
                 ) : null}
 
-                <div className="pointer-events-none absolute left-4 top-4 z-20 rounded-lg border border-white/10 bg-black/55 px-3 py-2 backdrop-blur-sm">
-                  <p className="flex items-center gap-1.5 text-[11px] font-medium text-white">
-                    <Navigation className="h-3.5 w-3.5 text-sky-400" />
-                    {t("walk3D.streetViewHint")}
-                  </p>
-                </div>
-
                 <iframe
                   title={t("walk3D.iframeTitle", { survey: surveyLabel })}
                   src={embedUrl}
@@ -143,8 +136,7 @@ export default function Parcel3DWalkModal({ parcel, geometry, onClose }: Props) 
               </div>
             </div>
 
-            <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-700/60 bg-[#151b22] px-4 py-3 sm:px-5">
-              <p className="text-[10px] text-slate-500">{t("walk3D.demoNote")}</p>
+            <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-slate-700/60 bg-[#151b22] px-4 py-3 sm:px-5">
               <button
                 type="button"
                 onClick={() => openExternal(streetViewUrl)}

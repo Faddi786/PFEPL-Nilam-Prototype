@@ -16,6 +16,12 @@
     "hideHistory": "Hide history",
     "showDocuments": "Show documents",
     "walk3D": "3D walk",
+    "export": {
+      "label": "Export",
+      "documents": "Documents",
+      "vector": "Vector",
+      "raster": "Raster"
+    },
     "lockCard": "Lock card",
     "unlockCard": "Unlock card",
     "turnOnTooltip": "Turn on tooltip",
@@ -51,10 +57,8 @@
     "parcelLabel": "Parcel {{survey}} / ULPIN {{ulpin}}",
     "close": "Close 3D walk",
     "loading": "Loading Street View…",
-    "streetViewHint": "Street View — Immersive walk",
     "demoLocation": "Demo location: {{location}}",
     "iframeTitle": "Street View walk — Parcel {{survey}}",
-    "demoNote": "Ground-level walk shown at a demo location with Street View coverage.",
     "openGoogleMaps": "Open in Google Maps"
   },
   "workspace": {
@@ -95,15 +99,13 @@
     "tabs": {
       "overview": "Overview",
       "ownership": "Ownership",
-      "documents": "Documents",
+      "nilamagal": "Nilamagal",
+      "collabland": "Collabland",
+      "ulpin-lineage": "ULPIN Lineage",
       "images": "Images",
-      "map": "Map",
-      "survey": "Survey",
-      "mutations": "Mutations",
-      "agriculture": "Agriculture",
+      "agristack": "Agristack",
       "analytics": "Analytics",
-      "downloads": "Downloads",
-      "audit-log": "Audit Log"
+      "documents": "Documents"
     },
     "fields": {
       "surveyNo": "Survey No.",

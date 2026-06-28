@@ -1,4 +1,5 @@
 import {
+  DEFAULT_REGION_KEY,
   getRegionConfig,
   WORKBENCH_SHAPEFILE_REGIONS,
   type ParcelRecord,
@@ -7,6 +8,12 @@ import {
 import { getWorkbenchRegionDatasetSync, loadWorkbenchRegionDataset } from "./workbenchParcels";
 
 export const DATABASE_PARCEL_LIMIT = 50;
+
+/** Khutal (karaikal) first — matches default workbench region. */
+const DATABASE_REGION_ORDER: RegionKey[] = [
+  DEFAULT_REGION_KEY,
+  ...WORKBENCH_SHAPEFILE_REGIONS.filter((key) => key !== DEFAULT_REGION_KEY),
+];
 
 export type DatabaseParcel = ParcelRecord & {
   regionKey: RegionKey;
@@ -61,7 +68,7 @@ export type DatabaseFilterOptions = {
 };
 
 export function loadAllWorkbenchParcelsSync(): DatabaseParcel[] {
-  return WORKBENCH_SHAPEFILE_REGIONS.flatMap((regionKey) => {
+  return DATABASE_REGION_ORDER.flatMap((regionKey) => {
     const config = getRegionConfig(regionKey);
     const dataset = getWorkbenchRegionDatasetSync(regionKey);
     return dataset.parcels.slice(0, DATABASE_PARCEL_LIMIT).map((parcel) => ({
@@ -74,9 +81,9 @@ export function loadAllWorkbenchParcelsSync(): DatabaseParcel[] {
 
 export async function loadAllWorkbenchParcels(): Promise<DatabaseParcel[]> {
   const datasets = await Promise.all(
-    WORKBENCH_SHAPEFILE_REGIONS.map((regionKey) => loadWorkbenchRegionDataset(regionKey)),
+    DATABASE_REGION_ORDER.map((regionKey) => loadWorkbenchRegionDataset(regionKey)),
   );
-  return WORKBENCH_SHAPEFILE_REGIONS.flatMap((regionKey, index) => {
+  return DATABASE_REGION_ORDER.flatMap((regionKey, index) => {
     const config = getRegionConfig(regionKey);
     return datasets[index].parcels.slice(0, DATABASE_PARCEL_LIMIT).map((parcel) => ({
       ...parcel,

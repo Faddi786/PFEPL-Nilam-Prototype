@@ -3,6 +3,7 @@ import { ArrowLeft, Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import AuditHistoryRow from "../../components/audit/AuditHistoryRow";
+import i18n from "../../i18n";
 import WorkflowSwitcher from "../../components/WorkflowSwitcher";
 import { createMapEngine } from "../../lib/mapEngine";
 import {
@@ -30,6 +31,10 @@ function applyAuditLogLayerDefaults(engine: ReturnType<typeof createMapEngine>) 
     "taluk",
     "village",
     "ward",
+    "adminState",
+    "adminDistrict",
+    "adminTaluka",
+    "adminVillage",
     "fmb",
     "fmbChains",
     "variance",
@@ -78,6 +83,15 @@ export default function AuditLogPage() {
   const [cardTopOffset, setCardTopOffset] = useState("4.75rem");
 
   selectedParcelRef.current = selectedParcel;
+
+  useEffect(() => {
+    const previousLanguage = i18n.resolvedLanguage ?? i18n.language;
+    void i18n.changeLanguage("en");
+
+    return () => {
+      void i18n.changeLanguage(previousLanguage);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

@@ -18,13 +18,25 @@ import { LineString, MultiPolygon, Point, Polygon } from "ol/geom";
 import type { Coordinate } from "ol/coordinate";
 import * as turf from "@turf/turf";
 import type { RegionDataset } from "../data/mockData";
+import {
+  ADMIN_BOUNDARY_LAYER_IDS,
+  loadAdminBoundaryGeoJson,
+  type AdminBoundaryLayerId,
+} from "../data/adminBoundaries";
 import { CROP_COLORS, CROP_TYPES } from "./thematicLayers";
+
+/** Legacy demo admin bbox grids — not shown on the workbench map. */
+const LEGACY_MOCK_ADMIN_LAYER_IDS = ["region", "taluk", "village", "ward"] as const;
 
 type LayerId =
   | "region"
   | "taluk"
   | "village"
   | "ward"
+  | "adminState"
+  | "adminDistrict"
+  | "adminTaluka"
+  | "adminVillage"
   | "fmb"
   | "fmbChains"
   | "parcelBoundaries"
@@ -351,6 +363,10 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
     taluk: new VectorSource(),
     village: new VectorSource(),
     ward: new VectorSource(),
+    adminState: new VectorSource(),
+    adminDistrict: new VectorSource(),
+    adminTaluka: new VectorSource(),
+    adminVillage: new VectorSource(),
     fmb: new VectorSource(),
     fmbChains: new VectorSource(),
     parcelBoundaries: new VectorSource(),
@@ -378,6 +394,10 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
     taluk: new Style({ stroke: new Stroke({ color: "#64748b", width: 1.6 }), fill: new Fill({ color: "rgba(100,116,139,0.04)" }) }),
     village: new Style({ stroke: new Stroke({ color: "#0f766e", width: 1.2 }), fill: new Fill({ color: "rgba(20,184,166,0.05)" }) }),
     ward: new Style({ stroke: new Stroke({ color: "#3b82f6", width: 1.1 }), fill: new Fill({ color: "rgba(59,130,246,0.05)" }) }),
+    adminState: new Style({ stroke: new Stroke({ color: "#7c3aed", width: 2.5 }) }),
+    adminDistrict: new Style({ stroke: new Stroke({ color: "#9333ea", width: 2 }) }),
+    adminTaluka: new Style({ stroke: new Stroke({ color: "#c4a574", width: 1.5 }) }),
+    adminVillage: new Style({ stroke: new Stroke({ color: "#2563eb", width: 1 }) }),
     fmb: new Style({ stroke: new Stroke({ color: "#64748b", width: 1.1, lineDash: [5, 5] }), fill: new Fill({ color: "rgba(100,116,139,0.04)" }) }),
     fmbChains: new Style({ stroke: new Stroke({ color: "#b45309", width: 1.4, lineDash: [8, 5] }) }),
     parcels: new Style({ stroke: new Stroke({ color: "#22c55e", width: 0.8 }), fill: new Fill({ color: "#22c55e" }) }),
@@ -762,10 +782,54 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
   }
 
   const layerMap: Record<LayerId | "analysis", VectorLayer<VectorSource>> = {
-    region: new VectorLayer({ source: genericSources.region, style: styleByLayer.region, zIndex: 2 }),
-    taluk: new VectorLayer({ source: genericSources.taluk, style: styleByLayer.taluk, zIndex: 3 }),
-    village: new VectorLayer({ source: genericSources.village, style: styleByLayer.village, zIndex: 4 }),
-    ward: new VectorLayer({ source: genericSources.ward, style: styleByLayer.ward, zIndex: 5 }),
+    region: new VectorLayer({
+      source: genericSources.region,
+      style: styleByLayer.region,
+      zIndex: 2,
+      visible: false,
+    }),
+    taluk: new VectorLayer({
+      source: genericSources.taluk,
+      style: styleByLayer.taluk,
+      zIndex: 3,
+      visible: false,
+    }),
+    village: new VectorLayer({
+      source: genericSources.village,
+      style: styleByLayer.village,
+      zIndex: 4,
+      visible: false,
+    }),
+    ward: new VectorLayer({
+      source: genericSources.ward,
+      style: styleByLayer.ward,
+      zIndex: 5,
+      visible: false,
+    }),
+    adminState: new VectorLayer({
+      source: genericSources.adminState,
+      style: styleByLayer.adminState,
+      zIndex: 2.1,
+      visible: false,
+    }),
+    adminDistrict: new VectorLayer({
+      source: genericSources.adminDistrict,
+      style: styleByLayer.adminDistrict,
+      zIndex: 2.2,
+      visible: false,
+    }),
+    adminTaluka: new VectorLayer({
+      source: genericSources.adminTaluka,
+      style: styleByLayer.adminTaluka,
+      zIndex: 2.3,
+      visible: false,
+    }),
+    adminVillage: new VectorLayer({
+      source: genericSources.adminVillage,
+      style: styleByLayer.adminVillage,
+      zIndex: 2.4,
+      visible: false,
+    }),
     fmb: new VectorLayer({ source: genericSources.fmb, style: styleByLayer.fmb, zIndex: 6 }),
     fmbChains: new VectorLayer({
       source: genericSources.fmbChains,
@@ -913,6 +977,10 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
       layerMap.taluk,
       layerMap.village,
       layerMap.ward,
+      layerMap.adminState,
+      layerMap.adminDistrict,
+      layerMap.adminTaluka,
+      layerMap.adminVillage,
       layerMap.fmb,
       layerMap.roads,
       layerMap.waterBodies,
@@ -1158,6 +1226,11 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
     dirtyParcelIds.clear();
     clearFmbChainSelection();
     (Object.keys(genericSources) as LayerId[]).forEach((layerId) => {
+      if (ADMIN_BOUNDARY_LAYER_IDS.includes(layerId as AdminBoundaryLayerId)) return;
+      if (LEGACY_MOCK_ADMIN_LAYER_IDS.includes(layerId as (typeof LEGACY_MOCK_ADMIN_LAYER_IDS)[number])) {
+        genericSources[layerId].clear();
+        return;
+      }
       genericSources[layerId].clear();
       if (layerId === "parcelBoundaries" || layerId === "variance") return;
       const collection = next.geojson[layerId];
@@ -1184,6 +1257,18 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
   }
 
   loadDataset(dataset);
+
+  void loadAdminBoundaryGeoJson().then((collections) => {
+    ADMIN_BOUNDARY_LAYER_IDS.forEach((layerId) => {
+      const collection = collections[layerId];
+      if (!collection?.features?.length) return;
+      const features = format.readFeatures(collection, {
+        dataProjection: "EPSG:4326",
+        featureProjection: "EPSG:3857",
+      });
+      genericSources[layerId].addFeatures(features);
+    });
+  });
 
   select.on("select", () => {
     const selected = select.getFeatures().getArray();

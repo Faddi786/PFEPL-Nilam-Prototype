@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
 import { Check, Layers } from "lucide-react";
 import { BASEMAP_OPTIONS } from "../lib/basemaps";
+import { useDropdownOpen } from "../hooks/useDropdownOpen";
 
 type Props = {
   activeBasemapId: string;
@@ -8,30 +8,20 @@ type Props = {
 };
 
 export default function BasemapDropdown({ activeBasemapId, onBasemapChange }: Props) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onDocClick(event: MouseEvent) {
-      const target = event.target as Node;
-      if (!rootRef.current?.contains(target)) {
-        setOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [open]);
+  const { open, rootRef, onRootMouseEnter, onRootMouseLeave, onButtonClick } = useDropdownOpen();
 
   return (
-    <div ref={rootRef} className="relative">
+    <div
+      ref={rootRef}
+      className="relative"
+      onMouseEnter={onRootMouseEnter}
+      onMouseLeave={onRootMouseLeave}
+    >
       <button
         type="button"
         aria-label="Basemap"
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={onButtonClick}
         className={`inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/80 bg-white/95 text-slate-700 shadow-lg backdrop-blur-md transition hover:border-slate-200 hover:text-slate-900 ${
           open ? "border-slate-200 text-slate-900" : ""
         }`}
@@ -53,10 +43,7 @@ export default function BasemapDropdown({ activeBasemapId, onBasemapChange }: Pr
               <button
                 key={option.id}
                 type="button"
-                onClick={() => {
-                  onBasemapChange(option.id);
-                  setOpen(false);
-                }}
+                onClick={() => onBasemapChange(option.id)}
                 className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs transition ${
                   active ? "bg-[#1A1A1A] text-white" : "text-slate-700 hover:bg-slate-50"
                 }`}

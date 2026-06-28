@@ -398,7 +398,6 @@ export default function AuditHistoryRow({
         <ParcelWorkspaceModal
           parcel={parcel}
           geometry={currentGeometry}
-          auditHistory={history}
           onClose={() => setWorkspaceOpen(false)}
         />
       ) : null}

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
 import { TreePine } from "lucide-react";
 import type { LayerConfig } from "../data/mockData";
+import { useDropdownOpen } from "../hooks/useDropdownOpen";
 
 type Props = {
   layers: LayerConfig[];
@@ -8,23 +8,8 @@ type Props = {
 };
 
 export default function ThematicLayersDropdown({ layers, onToggle }: Props) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const { open, rootRef, onRootMouseEnter, onRootMouseLeave, onButtonClick } = useDropdownOpen();
   const allVisible = layers.length > 0 && layers.every((layer) => layer.visible);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onDocClick(event: MouseEvent) {
-      const target = event.target as Node;
-      if (!rootRef.current?.contains(target)) {
-        setOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [open]);
 
   function handleToggleAll() {
     const nextVisible = !allVisible;
@@ -32,12 +17,17 @@ export default function ThematicLayersDropdown({ layers, onToggle }: Props) {
   }
 
   return (
-    <div ref={rootRef} className="relative">
+    <div
+      ref={rootRef}
+      className="relative"
+      onMouseEnter={onRootMouseEnter}
+      onMouseLeave={onRootMouseLeave}
+    >
       <button
         type="button"
         aria-label="Thematic overlays"
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={onButtonClick}
         className={`inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/80 bg-white/95 text-slate-700 shadow-lg backdrop-blur-md transition hover:border-slate-200 hover:text-slate-900 ${
           open ? "border-slate-200 text-slate-900" : ""
         }`}

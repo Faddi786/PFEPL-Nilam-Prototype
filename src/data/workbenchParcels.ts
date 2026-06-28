@@ -2,6 +2,7 @@ import * as turf from "@turf/turf";
 import {
   getRegionConfig,
   getRegionDataset,
+  parcelStatusForIndex,
   rebuildRegionDatasetWithParcels,
   varianceBandForIndex,
   variancePctForBand,
@@ -199,6 +200,7 @@ function assignSyntheticAttrs(
 
     const band = varianceBandForIndex(parcelIndex);
     const variancePct = variancePctForBand(band, parcelIndex);
+    const status = parcelStatusForIndex(parcelIndex);
 
     const attrs: ParcelRecord = {
       ...template,
@@ -207,8 +209,17 @@ function assignSyntheticAttrs(
       areaSqM,
       source: "Village shapefile (Ulhas Vaitarna)",
       osmTag: "parcel_boundary",
+      status,
       varianceBand: band,
       variancePct,
+      taxDue: status === "disputed" ? "Pending verification" : "Nil",
+      mutationRef:
+        status === "mutation_pending"
+          ? `${config.code}-MUT-2026-${String(parcelIndex).padStart(4, "0")}`
+          : "—",
+      mutationType: status === "mutation_pending" ? "Sub-division" : "None",
+      approvalStatus:
+        status === "mutation_pending" ? "Pending" : parcelIndex % 7 === 0 ? "Under review" : "Approved",
     };
 
     parcelAttrs[id] = attrs;

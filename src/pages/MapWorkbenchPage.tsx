@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { motion } from "framer-motion";
 
-import { BarChart3, ChevronRight, Database, Layers, LogOut, Route, Smartphone, Sparkles } from "lucide-react";
+import { BarChart3, ChevronRight, Columns2, Database, Eye, FileScan, Flame, GitCompare, Grid3x3, Layers, LogOut, Network, Route, Shield, Smartphone, Sparkles, Users, Wrench } from "lucide-react";
 
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
@@ -36,6 +36,12 @@ const PANEL_GAP = 12;
 const PANEL_TRANSITION = { duration: 0.35, ease: [0.4, 0, 0.2, 1] as const };
 
 const PANEL_SEEN_KEY = "nilam:panel-seen";
+
+/** Set to true to show Admin in the right sidebar; /admin route remains available either way. */
+const SHOW_ADMIN_IN_SIDEBAR = false;
+
+/** Set to true to show Mutation Heatmap in the right sidebar; /heatmap route remains available either way. */
+const SHOW_MUTATION_HEATMAP_IN_SIDEBAR = false;
 
 
 
@@ -367,6 +373,28 @@ export default function MapWorkbenchPage() {
 
               <Link
 
+                to="/fmb-automation"
+
+                className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+
+              >
+
+                <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+
+                  <FileScan className="h-4 w-4 text-slate-600" />
+
+                  FMB Automation
+
+                </span>
+
+                <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+
+              </Link>
+
+
+
+              <Link
+
                 to="/nil-ai"
 
                 className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
@@ -385,9 +413,209 @@ export default function MapWorkbenchPage() {
 
               </Link>
 
+
+
+              <Link
+
+                to="/citizen"
+
+                className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+
+              >
+
+                <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+
+                  <Users className="h-4 w-4 text-slate-600" />
+
+                  Citizen Portal
+
+                </span>
+
+                <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+
+              </Link>
+
+
+
+              {SHOW_ADMIN_IN_SIDEBAR && (
+                <Link
+
+                  to="/admin"
+
+                  className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+
+                >
+
+                  <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+
+                    <Shield className="h-4 w-4 text-slate-600" />
+
+                    Admin
+
+                  </span>
+
+                  <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+
+                </Link>
+              )}
+
+
+
+              <Link
+
+                to="/monitor"
+
+                className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+
+              >
+
+                <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+
+                  <Eye className="h-4 w-4 text-slate-600" />
+
+                  Monitor - Eye
+
+                </span>
+
+                <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+
+              </Link>
+
+
+
+              <Link
+
+                to="/architecture"
+
+                className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+
+              >
+
+                <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+
+                  <Network className="h-4 w-4 text-slate-600" />
+
+                  Scale Architecture
+
+                </span>
+
+                <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+
+              </Link>
+
+
+
+              <Link
+
+                to="/warp"
+
+                className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+
+              >
+
+                <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+
+                  <Grid3x3 className="h-4 w-4 text-slate-600" />
+
+                  Georeferencing
+
+                </span>
+
+                <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+
+              </Link>
+
+
+
+              <Link
+
+                to="/transformation"
+
+                className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+
+              >
+
+                <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+
+                  <GitCompare className="h-4 w-4 text-slate-600" />
+
+                  Transform Tools
+
+                </span>
+
+                <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+
+              </Link>
+
+
+
+              <Link
+
+                to="/swipe"
+
+                className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+
+              >
+
+                <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+
+                  <Columns2 className="h-4 w-4 text-slate-600" />
+
+                  Swipe Compare
+
+                </span>
+
+                <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+
+              </Link>
+
+
+
+              {SHOW_MUTATION_HEATMAP_IN_SIDEBAR && (
+                <Link
+
+                  to="/heatmap"
+
+                  className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+
+                >
+
+                  <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+
+                    <Flame className="h-4 w-4 text-slate-600" />
+
+                    Mutation Heatmap
+
+                  </span>
+
+                  <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+
+                </Link>
+              )}
+
+
+
+              <Link
+
+                to="/more-tools"
+
+                className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+
+              >
+
+                <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+
+                  <Wrench className="h-4 w-4 text-slate-600" />
+
+                  More Tools
+
+                </span>
+
+                <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+
+              </Link>
+
             </div>
-
-
 
             <div className="shrink-0 border-t border-slate-100 p-3">
 
