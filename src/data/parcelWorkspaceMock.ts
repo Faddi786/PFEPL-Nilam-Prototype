@@ -158,14 +158,14 @@ export type WorkspaceImageAsset = {
 };
 
 export const WORKSPACE_IMAGE_ASSETS: WorkspaceImageAsset[] = [
-  { id: "sat-2024", label: "Satellite 2024", category: "Satellite imagery", src: "/assets/documents/satellite-landsat.jpg" },
-  { id: "sat-2020", label: "Satellite 2020", category: "Satellite imagery", src: "/assets/documents/satellite-landsat.jpg" },
-  { id: "cadastral", label: "Cadastral overlay", category: "Survey sketch", src: "/assets/documents/cadastral-map.jpg" },
-  { id: "fmb-field", label: "FMB field boundary", category: "Survey sketch", src: "/assets/documents/survey-boundary.jpg" },
-  { id: "site-inspection", label: "Site inspection", category: "Field photos", src: "/assets/documents/survey-boundary.jpg" },
-  { id: "crop-paddy", label: "Kharif crop — Paddy", category: "Agristack", src: "/assets/documents/paddy-field.jpg" },
-  { id: "crop-sugarcane", label: "Rabi crop — Sugarcane", category: "Agristack", src: "/assets/documents/farmer-field.jpg" },
-  { id: "farmer-portrait", label: "Cultivator verification", category: "Agristack", src: "/assets/documents/farmer-field.jpg" },
+  { id: "sat-2024", label: "Satellite 2024", category: "Satellite imagery", src: "/assets/parcel-images/sat-2024-aerial-farm.jpg" },
+  { id: "sat-2020", label: "Satellite 2020", category: "Satellite imagery", src: "/assets/parcel-images/sat-2020-paddy-aerial.jpg" },
+  { id: "cadastral", label: "Cadastral overlay", category: "Survey sketch", src: "/assets/parcel-images/cadastral-koppa-taluk.png" },
+  { id: "fmb-field", label: "FMB field boundary", category: "Survey sketch", src: "/assets/parcel-images/fmb-village-boundaries.jpg" },
+  { id: "site-inspection", label: "Site inspection", category: "Field photos", src: "/assets/parcel-images/site-inspection.jpg" },
+  { id: "crop-paddy", label: "Kharif crop — Paddy", category: "Agristack", src: "/assets/parcel-images/crop-paddy-tamilnadu.jpg" },
+  { id: "crop-sugarcane", label: "Rabi crop — Sugarcane", category: "Agristack", src: "/assets/parcel-images/crop-sugarcane-maharashtra.jpg" },
+  { id: "farmer-portrait", label: "Cultivator verification", category: "Agristack", src: "/assets/parcel-images/cultivator-field-tamilnadu.jpg" },
 ];
 
 export type NilamagalRecord = {

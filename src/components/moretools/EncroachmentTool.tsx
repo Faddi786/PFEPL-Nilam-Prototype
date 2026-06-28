@@ -1,18 +1,23 @@
 import { useMemo, useState } from "react";
 import MoreToolsMap, { type MapOverlay } from "./MoreToolsMap";
 import { EmptyResults, ResultsHeader, RunAnalysisButton, ToolShell } from "./MoreToolsShared";
-import { DEMO_PARCELS, ENCROACHMENT_CASES, GOVT_LAND_RING } from "../../data/moreToolsMock";
+import {
+  getCadastralParcels,
+  getEncroachmentCases,
+  getGovtLandRing,
+} from "../../data/cadastralSpatialData";
 
 export default function EncroachmentTool() {
   const [analyzed, setAnalyzed] = useState(false);
   const [running, setRunning] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const selected = ENCROACHMENT_CASES.find((c) => c.id === selectedId) ?? ENCROACHMENT_CASES[0];
-  const totalEncroached = ENCROACHMENT_CASES.reduce((s, c) => s + c.encroachedAreaSqM, 0);
+  const encroachmentCases = getEncroachmentCases();
+  const selected = encroachmentCases.find((c) => c.id === selectedId) ?? encroachmentCases[0];
+  const totalEncroached = encroachmentCases.reduce((s, c) => s + c.encroachedAreaSqM, 0);
 
   const overlays = useMemo((): MapOverlay[] => {
-    const items: MapOverlay[] = DEMO_PARCELS.slice(0, 6).map((p) => ({
+    const items: MapOverlay[] = getCadastralParcels().slice(0, 6).map((p) => ({
       id: `parcel-${p.id}`,
       type: "polygon",
       coordinates: p.ring,
@@ -25,19 +30,18 @@ export default function EncroachmentTool() {
     items.push({
       id: "govt-land",
       type: "polygon",
-      coordinates: GOVT_LAND_RING,
+      coordinates: getGovtLandRing(),
       fill: analyzed ? "rgba(245,158,11,0.3)" : "rgba(245,158,11,0.15)",
       stroke: "#d97706",
       strokeWidth: 2,
       zIndex: 2,
     });
 
-    if (analyzed) {
-      const highlight = selected ?? ENCROACHMENT_CASES[0];
+    if (analyzed && selected) {
       items.push({
         id: "encroachment",
         type: "polygon",
-        coordinates: highlight.ring,
+        coordinates: selected.ring,
         fill: "rgba(239,68,68,0.55)",
         stroke: "#dc2626",
         strokeWidth: 2.5,
@@ -52,7 +56,7 @@ export default function EncroachmentTool() {
     setRunning(true);
     window.setTimeout(() => {
       setAnalyzed(true);
-      setSelectedId(ENCROACHMENT_CASES[0].id);
+      setSelectedId(encroachmentCases[0]?.id ?? null);
       setRunning(false);
     }, 650);
   }
@@ -72,16 +76,18 @@ export default function EncroachmentTool() {
         analyzed ? (
           <>
             <ResultsHeader
-              title={`${ENCROACHMENT_CASES.length} encroachment cases found`}
+              title={`${encroachmentCases.length} encroachment cases found`}
               badge={`${totalEncroached} sq.m total`}
               badgeTone="danger"
             />
-            <p className="mb-3 text-sm text-slate-600">
-              Primary case: Survey <strong>{selected.surveyNo}</strong> on{" "}
-              <strong>{selected.govtLandType}</strong> — encroached area{" "}
-              <strong className="text-rose-600">{selected.encroachedAreaSqM} sq.m</strong> (
-              {selected.buildingType})
-            </p>
+            {selected ? (
+              <p className="mb-3 text-sm text-slate-600">
+                Primary case: Survey <strong>{selected.surveyNo}</strong> on{" "}
+                <strong>{selected.govtLandType}</strong> — encroached area{" "}
+                <strong className="text-rose-600">{selected.encroachedAreaSqM} sq.m</strong> (
+                {selected.buildingType})
+              </p>
+            ) : null}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[520px] text-left text-sm">
                 <thead>
@@ -94,7 +100,7 @@ export default function EncroachmentTool() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ENCROACHMENT_CASES.map((row) => (
+                  {encroachmentCases.map((row) => (
                     <tr
                       key={row.id}
                       onClick={() => setSelectedId(row.id)}

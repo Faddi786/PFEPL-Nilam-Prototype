@@ -15,6 +15,7 @@ import AuditLogPage from "./pages/workflows/AuditLogPage";
 import FmbAutomationPage from "./pages/workflows/FmbAutomationPage";
 import WarpPage from "./pages/WarpPage";
 import TransformationPage from "./pages/TransformationPage";
+import ToolsPage from "./pages/ToolsPage";
 import SwipeComparePage from "./pages/SwipeComparePage";
 import MutationHeatmapPage from "./pages/MutationHeatmapPage";
 import ScalableArchitecturePage from "./pages/ScalableArchitecturePage";
@@ -177,6 +178,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <WarpPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tools"
+        element={
+          <ProtectedRoute>
+            <ToolsPage />
           </ProtectedRoute>
         }
       />

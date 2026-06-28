@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, Pencil } from "lucide-react";
 import {
   confidenceColorClass,
   confidenceLabel,
+  FMB_PANEL_FIELD_IDS,
   getConfidenceLevel,
   type FmbExtractionState,
   type FmbTextField,
@@ -105,7 +106,9 @@ export default function FmbAttributePanel({ state, onFieldChange, selectedVertex
           <p className="text-sm font-semibold text-[#1A1A1A]">{state.parcelNumber.value}</p>
         </div>
 
-        {state.textFields.map((field) => (
+        {state.textFields
+          .filter((field) => (FMB_PANEL_FIELD_IDS as readonly string[]).includes(field.id))
+          .map((field) => (
           <TextFieldRow
             key={field.id}
             field={field}

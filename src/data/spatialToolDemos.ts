@@ -1,46 +1,25 @@
 import * as turf from "@turf/turf";
 import type { MapOverlay } from "../components/moretools/MoreToolsMap";
 import {
-  BUFFER_FEATURES,
-  DEMO_PARCELS,
-  type DemoParcel,
-} from "./moreToolsMock";
-
-export const VILLAGE_BOUNDARY_RING: [number, number][] = [
-  [79.830, 10.929],
-  [79.846, 10.929],
-  [79.846, 10.920],
-  [79.830, 10.920],
-  [79.830, 10.929],
-];
-
-export const MUNICIPAL_BOUNDARY_RING: [number, number][] = [
-  [79.835, 10.928],
-  [79.844, 10.928],
-  [79.844, 10.921],
-  [79.835, 10.921],
-  [79.835, 10.928],
-];
-
-export const FLOOD_ZONE_RING: [number, number][] = [
-  [79.832, 10.928],
-  [79.842, 10.929],
-  [79.843, 10.921],
-  [79.833, 10.920],
-  [79.832, 10.928],
-];
-
-export const DGPS_SURVEY_POINT: [number, number] = [79.8378, 10.9248];
-
-export const VIEWPORT_EXTENT: [number, number][] = [
-  [79.834, 10.927],
-  [79.842, 10.927],
-  [79.842, 10.922],
-  [79.834, 10.922],
-  [79.834, 10.927],
-];
-
-export const SELECTED_PARCEL_ID = DEMO_PARCELS[2]?.id ?? "p-3";
+  buildBufferPolygon,
+  getAreaDiffCases,
+  getBufferFeatures,
+  getCadastralParcels,
+  getDgpsSurveyPoint,
+  getEncroachmentCases,
+  getFloodZoneRing,
+  getGovtLandRing,
+  getIntersectLayerPairs,
+  getOverlapCases,
+  getParcelsInBuffer,
+  getSelectedParcelId,
+  getSpatialContext,
+  getViewportExtent,
+  getVillageBoundaryRing,
+  getWorkbenchDataset,
+  isGovtParcel,
+  type CadastralParcel,
+} from "./cadastralSpatialData";
 
 export type DemoResultRow = Record<string, string | number>;
 
@@ -53,7 +32,7 @@ export type SpatialDemoOutput = {
   columns: { key: string; label: string }[];
 };
 
-function parcelPoly(p: DemoParcel) {
+function parcelPoly(p: CadastralParcel) {
   return turf.polygon([p.ring]);
 }
 
@@ -62,7 +41,7 @@ function baseParcelOverlays(
   highlightFill = "rgba(34,197,94,0.45)",
   highlightStroke = "#16a34a",
 ): MapOverlay[] {
-  return DEMO_PARCELS.map((p) => ({
+  return getCadastralParcels().map((p) => ({
     id: `parcel-${p.id}`,
     type: "polygon" as const,
     coordinates: p.ring,
@@ -111,7 +90,7 @@ function pointOverlay(id: string, coord: [number, number], color = "#dc2626"): M
   };
 }
 
-function parcelRows(parcels: DemoParcel[], extra?: (p: DemoParcel) => DemoResultRow): DemoResultRow[] {
+function parcelRows(parcels: CadastralParcel[], extra?: (p: CadastralParcel) => DemoResultRow): DemoResultRow[] {
   return parcels.map((p) => ({
     surveyNo: p.surveyNo,
     owner: p.owner,
@@ -122,8 +101,9 @@ function parcelRows(parcels: DemoParcel[], extra?: (p: DemoParcel) => DemoResult
 }
 
 export function runContainsWithinDemo(): SpatialDemoOutput {
-  const boundary = turf.polygon([VILLAGE_BOUNDARY_RING]);
-  const inside = DEMO_PARCELS.filter((p) => {
+  const villageBoundary = getVillageBoundaryRing();
+  const boundary = turf.polygon([villageBoundary]);
+  const inside = getCadastralParcels().filter((p) => {
     try {
       return turf.booleanWithin(parcelPoly(p), boundary);
     } catch {
@@ -133,7 +113,7 @@ export function runContainsWithinDemo(): SpatialDemoOutput {
   const ids = new Set(inside.map((p) => p.id));
   return {
     overlays: [
-      boundaryOverlay("village", VILLAGE_BOUNDARY_RING, "#7c3aed", "rgba(124,58,237,0.12)"),
+      boundaryOverlay("village", villageBoundary, "#7c3aed", "rgba(124,58,237,0.12)"),
       ...baseParcelOverlays(ids),
     ],
     rows: parcelRows(inside, () => ({ status: "Fully within Khutal boundary" })),
@@ -151,9 +131,9 @@ export function runContainsWithinDemo(): SpatialDemoOutput {
 }
 
 export function runTouchesDemo(): SpatialDemoOutput {
-  const selected = DEMO_PARCELS.find((p) => p.id === SELECTED_PARCEL_ID) ?? DEMO_PARCELS[2];
+  const selected = getCadastralParcels().find((p) => p.id === getSelectedParcelId()) ?? getCadastralParcels()[2];
   const selectedPoly = parcelPoly(selected);
-  const touching = DEMO_PARCELS.filter((p) => {
+  const touching = getCadastralParcels().filter((p) => {
     if (p.id === selected.id) return false;
     try {
       return turf.booleanTouches(selectedPoly, parcelPoly(p));
@@ -194,8 +174,9 @@ export function runTouchesDemo(): SpatialDemoOutput {
 }
 
 export function runDisjointDemo(): SpatialDemoOutput {
-  const refLayer = turf.polygon([FLOOD_ZONE_RING]);
-  const disjoint = DEMO_PARCELS.filter((p) => {
+  const floodZone = getFloodZoneRing();
+  const refLayer = turf.polygon([floodZone]);
+  const disjoint = getCadastralParcels().filter((p) => {
     try {
       return turf.booleanDisjoint(parcelPoly(p), refLayer);
     } catch {
@@ -205,7 +186,7 @@ export function runDisjointDemo(): SpatialDemoOutput {
   const ids = new Set(disjoint.map((p) => p.id));
   return {
     overlays: [
-      boundaryOverlay("flood", FLOOD_ZONE_RING, "#0284c7", "rgba(2,132,199,0.2)"),
+      boundaryOverlay("flood", floodZone, "#0284c7", "rgba(2,132,199,0.2)"),
       ...baseParcelOverlays(ids, "rgba(34,197,94,0.4)", "#16a34a"),
     ],
     rows: parcelRows(disjoint, () => ({ refLayer: "Flood hazard zone", overlap: "None" })),
@@ -222,8 +203,9 @@ export function runDisjointDemo(): SpatialDemoOutput {
 }
 
 export function runCrossesDemo(): SpatialDemoOutput {
-  const road = turf.lineString(BUFFER_FEATURES.road.line);
-  const crossed = DEMO_PARCELS.filter((p) => {
+  const bufferFeatures = getBufferFeatures();
+  const road = turf.lineString(bufferFeatures.road.line);
+  const crossed = getCadastralParcels().filter((p) => {
     try {
       return turf.booleanCrosses(road, parcelPoly(p));
     } catch {
@@ -236,7 +218,7 @@ export function runCrossesDemo(): SpatialDemoOutput {
     {
       id: "road",
       type: "line",
-      coordinates: BUFFER_FEATURES.road.line,
+      coordinates: bufferFeatures.road.line,
       stroke: "#475569",
       strokeWidth: 4,
       zIndex: 5,
@@ -263,8 +245,9 @@ export function runCrossesDemo(): SpatialDemoOutput {
 }
 
 export function runDistanceQueryDemo(distanceM = 120): SpatialDemoOutput {
-  const point = turf.point(DGPS_SURVEY_POINT);
-  const nearby = DEMO_PARCELS.filter((p) => {
+  const dgpsPoint = getDgpsSurveyPoint();
+  const point = turf.point(dgpsPoint);
+  const nearby = getCadastralParcels().filter((p) => {
     try {
       const d = turf.distance(point, turf.centroid(parcelPoly(p)), { units: "meters" });
       return d <= distanceM;
@@ -278,7 +261,7 @@ export function runDistanceQueryDemo(distanceM = 120): SpatialDemoOutput {
   const ids = new Set(nearby.map((x) => x.parcel.id));
   const bufferRing = turf.buffer(point, distanceM, { units: "meters" });
   const overlays: MapOverlay[] = [
-    pointOverlay("dgps", DGPS_SURVEY_POINT),
+    pointOverlay("dgps", dgpsPoint),
     ...baseParcelOverlays(ids, "rgba(249,115,22,0.45)", "#ea580c"),
   ];
   if (bufferRing?.geometry?.type === "Polygon") {
@@ -314,10 +297,11 @@ export function runDistanceQueryDemo(distanceM = 120): SpatialDemoOutput {
 }
 
 export function runNearestNeighborDemo(): SpatialDemoOutput {
-  const point = turf.point(DGPS_SURVEY_POINT);
-  let nearest: DemoParcel | null = null;
+  const dgpsPoint = getDgpsSurveyPoint();
+  const point = turf.point(dgpsPoint);
+  let nearest: CadastralParcel | null = null;
   let minDist = Infinity;
-  for (const p of DEMO_PARCELS) {
+  for (const p of getCadastralParcels()) {
     const d = turf.distance(point, turf.centroid(parcelPoly(p)), { units: "meters" });
     if (d < minDist) {
       minDist = d;
@@ -327,7 +311,7 @@ export function runNearestNeighborDemo(): SpatialDemoOutput {
   const ids = new Set(nearest ? [nearest.id] : []);
   return {
     overlays: [
-      pointOverlay("dgps", DGPS_SURVEY_POINT),
+      pointOverlay("dgps", dgpsPoint),
       ...baseParcelOverlays(ids, "rgba(34,197,94,0.5)", "#16a34a"),
     ],
     rows: nearest
@@ -346,8 +330,9 @@ export function runNearestNeighborDemo(): SpatialDemoOutput {
 }
 
 export function runPointInPolygonDemo(): SpatialDemoOutput {
-  const point = turf.point(DGPS_SURVEY_POINT);
-  const containing = DEMO_PARCELS.filter((p) => {
+  const dgpsPoint = getDgpsSurveyPoint();
+  const point = turf.point(dgpsPoint);
+  const containing = getCadastralParcels().filter((p) => {
     try {
       return turf.booleanPointInPolygon(point, parcelPoly(p));
     } catch {
@@ -357,7 +342,7 @@ export function runPointInPolygonDemo(): SpatialDemoOutput {
   const ids = new Set(containing.map((p) => p.id));
   return {
     overlays: [
-      pointOverlay("click-point", DGPS_SURVEY_POINT, "#7c3aed"),
+      pointOverlay("click-point", dgpsPoint, "#7c3aed"),
       ...baseParcelOverlays(ids, "rgba(124,58,237,0.45)", "#7c3aed"),
     ],
     rows: containing.map((p) => ({
@@ -383,9 +368,10 @@ export function runPointInPolygonDemo(): SpatialDemoOutput {
 }
 
 export function runBoundingBoxDemo(): SpatialDemoOutput {
-  const bbox = turf.bbox(turf.polygon([VIEWPORT_EXTENT]));
+  const viewportExtent = getViewportExtent();
+  const bbox = turf.bbox(turf.polygon([viewportExtent]));
   const bboxPoly = turf.bboxPolygon(bbox);
-  const inExtent = DEMO_PARCELS.filter((p) => {
+  const inExtent = getCadastralParcels().filter((p) => {
     try {
       return turf.booleanIntersects(parcelPoly(p), bboxPoly);
     } catch {
@@ -395,7 +381,7 @@ export function runBoundingBoxDemo(): SpatialDemoOutput {
   const ids = new Set(inExtent.map((p) => p.id));
   return {
     overlays: [
-      boundaryOverlay("viewport", VIEWPORT_EXTENT, "#0d9488", "rgba(13,148,136,0.15)"),
+      boundaryOverlay("viewport", viewportExtent, "#0d9488", "rgba(13,148,136,0.15)"),
       ...baseParcelOverlays(ids),
     ],
     rows: parcelRows(inExtent, () => ({ inViewport: "Yes" })),
@@ -412,7 +398,7 @@ export function runBoundingBoxDemo(): SpatialDemoOutput {
 }
 
 export function runUnionDemo(): SpatialDemoOutput {
-  const pair = DEMO_PARCELS.slice(0, 2);
+  const pair = getCadastralParcels().slice(0, 2);
   const polys = pair.map((p) => parcelPoly(p));
   const unioned = turf.union(turf.featureCollection(polys));
   const overlays: MapOverlay[] = pair.map((p, i) => ({
@@ -460,7 +446,7 @@ export function runUnionDemo(): SpatialDemoOutput {
 }
 
 export function runDifferenceDemo(): SpatialDemoOutput {
-  const parcel = DEMO_PARCELS[3];
+  const parcel = getCadastralParcels()[3];
   const encroach = turf.polygon([
     [
       [parcel.ring[0][0] + 0.001, parcel.ring[0][1] - 0.001],
@@ -526,8 +512,9 @@ export function runDifferenceDemo(): SpatialDemoOutput {
 }
 
 export function runClipDemo(): SpatialDemoOutput {
-  const boundary = turf.polygon([VILLAGE_BOUNDARY_RING]);
-  const clipped = DEMO_PARCELS.map((p) => {
+  const villageBoundary = getVillageBoundaryRing();
+  const boundary = turf.polygon([villageBoundary]);
+  const clipped = getCadastralParcels().map((p) => {
     try {
       const result = turf.intersect(turf.featureCollection([parcelPoly(p), boundary]));
       return result ? { parcel: p, clipped: true } : { parcel: p, clipped: false };
@@ -538,7 +525,7 @@ export function runClipDemo(): SpatialDemoOutput {
   const ids = new Set(clipped.map((x) => x.parcel.id));
   return {
     overlays: [
-      boundaryOverlay("boundary", VILLAGE_BOUNDARY_RING, "#7c3aed", "rgba(124,58,237,0.1)"),
+      boundaryOverlay("boundary", villageBoundary, "#7c3aed", "rgba(124,58,237,0.1)"),
       ...baseParcelOverlays(ids, "rgba(13,148,136,0.4)", "#0d9488"),
     ],
     rows: clipped.map(({ parcel: p }) => ({
@@ -560,15 +547,15 @@ export function runClipDemo(): SpatialDemoOutput {
 }
 
 export function runDissolveDemo(): SpatialDemoOutput {
-  const byOwner = new Map<string, DemoParcel[]>();
-  for (const p of DEMO_PARCELS) {
+  const byOwner = new Map<string, CadastralParcel[]>();
+  for (const p of getCadastralParcels()) {
     const list = byOwner.get(p.owner) ?? [];
     list.push(p);
     byOwner.set(p.owner, list);
   }
   const multiOwner = [...byOwner.entries()].filter(([, ps]) => ps.length >= 2).slice(0, 1);
-  const owner = multiOwner[0]?.[0] ?? DEMO_PARCELS[0].owner;
-  const group = byOwner.get(owner) ?? DEMO_PARCELS.slice(0, 2);
+  const owner = multiOwner[0]?.[0] ?? getCadastralParcels()[0].owner;
+  const group = byOwner.get(owner) ?? getCadastralParcels().slice(0, 2);
   const ids = new Set(group.map((p) => p.id));
   const polys = group.map((p) => parcelPoly(p));
   const dissolved = turf.union(turf.featureCollection(polys));
@@ -611,7 +598,7 @@ export function runDissolveDemo(): SpatialDemoOutput {
 }
 
 export function runConvexHullDemo(): SpatialDemoOutput {
-  const selected = DEMO_PARCELS.slice(0, 5);
+  const selected = getCadastralParcels().slice(0, 5);
   const collection = turf.featureCollection(selected.map((p) => parcelPoly(p)));
   const hull = turf.convex(collection);
   const ids = new Set(selected.map((p) => p.id));
@@ -652,7 +639,7 @@ export function runConvexHullDemo(): SpatialDemoOutput {
 }
 
 export function runCentroidDemo(): SpatialDemoOutput {
-  const sample = DEMO_PARCELS.slice(0, 6);
+  const sample = getCadastralParcels().slice(0, 6);
   const overlays: MapOverlay[] = [
     ...baseParcelOverlays(new Set(sample.map((p) => p.id)), "rgba(148,163,184,0.2)", "#64748b"),
   ];
@@ -684,8 +671,8 @@ export function runCentroidDemo(): SpatialDemoOutput {
 }
 
 export function runSymmetricalDiffDemo(): SpatialDemoOutput {
-  const a = turf.polygon([DEMO_PARCELS[0].ring]);
-  const b = turf.polygon([DEMO_PARCELS[1].ring]);
+  const a = turf.polygon([getCadastralParcels()[0].ring]);
+  const b = turf.polygon([getCadastralParcels()[1].ring]);
   const aMinusB = turf.difference(turf.featureCollection([a, b]));
   const bMinusA = turf.difference(turf.featureCollection([b, a]));
   const parts = [aMinusB, bMinusA].filter((f): f is NonNullable<typeof aMinusB> => Boolean(f));
@@ -694,7 +681,7 @@ export function runSymmetricalDiffDemo(): SpatialDemoOutput {
     {
       id: "layer-a",
       type: "polygon",
-      coordinates: DEMO_PARCELS[0].ring,
+      coordinates: getCadastralParcels()[0].ring,
       fill: "rgba(59,130,246,0.3)",
       stroke: "#2563eb",
       strokeWidth: 2,
@@ -703,7 +690,7 @@ export function runSymmetricalDiffDemo(): SpatialDemoOutput {
     {
       id: "layer-b",
       type: "polygon",
-      coordinates: DEMO_PARCELS[1].ring,
+      coordinates: getCadastralParcels()[1].ring,
       fill: "rgba(16,185,129,0.25)",
       stroke: "#059669",
       strokeWidth: 2,
@@ -726,8 +713,8 @@ export function runSymmetricalDiffDemo(): SpatialDemoOutput {
     overlays,
     rows: [
       {
-        parcelA: DEMO_PARCELS[0].surveyNo,
-        parcelB: DEMO_PARCELS[1].surveyNo,
+        parcelA: getCadastralParcels()[0].surveyNo,
+        parcelB: getCadastralParcels()[1].surveyNo,
         exclusiveAreaSqM: exclusiveArea,
         relation: "A ⊕ B (exclusive)",
       },
@@ -745,8 +732,9 @@ export function runSymmetricalDiffDemo(): SpatialDemoOutput {
 }
 
 export function runSpatialJoinDemo(): SpatialDemoOutput {
-  const boundary = turf.polygon([VILLAGE_BOUNDARY_RING]);
-  const joined = DEMO_PARCELS.slice(0, 8).map((p) => {
+  const villageBoundary = getVillageBoundaryRing();
+  const boundary = turf.polygon([villageBoundary]);
+  const joined = getCadastralParcels().slice(0, 8).map((p) => {
     const inside = turf.booleanIntersects(parcelPoly(p), boundary);
     return {
       surveyNo: p.surveyNo,
@@ -756,10 +744,10 @@ export function runSpatialJoinDemo(): SpatialDemoOutput {
       ward: inside ? "Ward 4" : "—",
     };
   });
-  const ids = new Set(DEMO_PARCELS.slice(0, 8).map((p) => p.id));
+  const ids = new Set(getCadastralParcels().slice(0, 8).map((p) => p.id));
   return {
     overlays: [
-      boundaryOverlay("village", VILLAGE_BOUNDARY_RING, "#7c3aed", "rgba(124,58,237,0.1)"),
+      boundaryOverlay("village", villageBoundary, "#7c3aed", "rgba(124,58,237,0.1)"),
       ...baseParcelOverlays(ids),
     ],
     rows: joined,
@@ -777,8 +765,9 @@ export function runSpatialJoinDemo(): SpatialDemoOutput {
 }
 
 export function runSelectByLocationDemo(): SpatialDemoOutput {
-  const flood = turf.polygon([FLOOD_ZONE_RING]);
-  const selected = DEMO_PARCELS.filter((p) => {
+  const floodZone = getFloodZoneRing();
+  const flood = turf.polygon([floodZone]);
+  const selected = getCadastralParcels().filter((p) => {
     try {
       return p.classification === "Private" && turf.booleanIntersects(parcelPoly(p), flood);
     } catch {
@@ -788,7 +777,7 @@ export function runSelectByLocationDemo(): SpatialDemoOutput {
   const ids = new Set(selected.map((p) => p.id));
   return {
     overlays: [
-      boundaryOverlay("flood", FLOOD_ZONE_RING, "#0284c7", "rgba(2,132,199,0.2)"),
+      boundaryOverlay("flood", floodZone, "#0284c7", "rgba(2,132,199,0.2)"),
       ...baseParcelOverlays(ids, "rgba(239,68,68,0.45)", "#dc2626"),
     ],
     rows: selected.map((p) => ({
@@ -810,8 +799,9 @@ export function runSelectByLocationDemo(): SpatialDemoOutput {
 }
 
 export function runKNearestDemo(k = 5): SpatialDemoOutput {
-  const point = turf.point(DGPS_SURVEY_POINT);
-  const ranked = DEMO_PARCELS.map((p) => ({
+  const dgpsPoint = getDgpsSurveyPoint();
+  const point = turf.point(dgpsPoint);
+  const ranked = getCadastralParcels().map((p) => ({
     parcel: p,
     distanceM: turf.distance(point, turf.centroid(parcelPoly(p)), { units: "meters" }),
   }))
@@ -820,7 +810,7 @@ export function runKNearestDemo(k = 5): SpatialDemoOutput {
   const ids = new Set(ranked.map((x) => x.parcel.id));
   return {
     overlays: [
-      pointOverlay("dgps", DGPS_SURVEY_POINT),
+      pointOverlay("dgps", dgpsPoint),
       ...baseParcelOverlays(ids, "rgba(59,130,246,0.4)", "#2563eb"),
     ],
     rows: ranked.map((x, i) => ({
@@ -842,14 +832,15 @@ export function runKNearestDemo(k = 5): SpatialDemoOutput {
 }
 
 export function runRouteProximityDemo(): SpatialDemoOutput {
-  const road = BUFFER_FEATURES.road.line;
+  const bufferFeatures = getBufferFeatures();
+  const road = bufferFeatures.road.line;
   const bufferRing = turf.buffer(turf.lineString(road), 40, { units: "meters" });
   const bufferPoly =
     bufferRing?.geometry?.type === "Polygon"
       ? turf.polygon(bufferRing.geometry.coordinates as [number, number][][])
       : null;
   const inCorridor = bufferPoly
-    ? DEMO_PARCELS.filter((p) => {
+    ? getCadastralParcels().filter((p) => {
         try {
           return turf.booleanIntersects(parcelPoly(p), bufferPoly);
         } catch {
@@ -901,7 +892,356 @@ export function runRouteProximityDemo(): SpatialDemoOutput {
   };
 }
 
+export function getBaseParcelOverlays(): MapOverlay[] {
+  return getCadastralParcels().map((p) => ({
+    id: `parcel-${p.id}`,
+    type: "polygon" as const,
+    coordinates: p.ring,
+    fill: "rgba(148,163,184,0.2)",
+    stroke: "#64748b",
+    strokeWidth: 1,
+    zIndex: 1,
+  }));
+}
+
+export function runBufferDemo(featureType: "road" | "river" | "canal" = "road", distanceM = 50): SpatialDemoOutput {
+  const bufferFeatures = getBufferFeatures();
+  const parcelsInBuffer = getParcelsInBuffer(featureType, distanceM);
+  const ids = new Set(parcelsInBuffer.map((p) => p.id));
+  const overlays: MapOverlay[] = getCadastralParcels().map((p) => ({
+    id: `parcel-${p.id}`,
+    type: "polygon",
+    coordinates: p.ring,
+    fill: ids.has(p.id) ? "rgba(239,68,68,0.45)" : "rgba(148,163,184,0.2)",
+    stroke: ids.has(p.id) ? "#dc2626" : "#64748b",
+    strokeWidth: ids.has(p.id) ? 2 : 1,
+    zIndex: ids.has(p.id) ? 4 : 1,
+  }));
+
+  const bufferRing = buildBufferPolygon(featureType, distanceM);
+  if (bufferRing.length) {
+    overlays.push({
+      id: "buffer",
+      type: "polygon",
+      coordinates: bufferRing,
+      fill: "rgba(59,130,246,0.25)",
+      stroke: "#2563eb",
+      strokeWidth: 2,
+      lineDash: [6, 4],
+      zIndex: 2,
+    });
+  }
+
+  overlays.push({
+    id: "feature-line",
+    type: "line",
+    coordinates: bufferFeatures[featureType].line,
+    stroke: bufferFeatures[featureType].color,
+    strokeWidth: 4,
+    zIndex: 5,
+  });
+
+  return {
+    overlays,
+    rows: parcelsInBuffer.map((p) => ({
+      surveyNo: p.surveyNo,
+      owner: p.owner,
+      classification: p.classification,
+      areaSqM: p.areaSqM,
+    })),
+    summary: `${parcelsInBuffer.length} parcels within ${distanceM} m buffer`,
+    badge: bufferFeatures[featureType].label,
+    badgeTone: parcelsInBuffer.length > 0 ? "warning" : "success",
+    columns: [
+      { key: "surveyNo", label: "Survey No" },
+      { key: "owner", label: "Owner" },
+      { key: "classification", label: "Classification" },
+      { key: "areaSqM", label: "Area (sq.m)" },
+    ],
+  };
+}
+
+export function runAreaDiffDemo(): SpatialDemoOutput {
+  const areaDiffCases = getAreaDiffCases();
+  const selected = areaDiffCases[0];
+  const overlays: MapOverlay[] = getCadastralParcels().slice(0, 8).map((p, i) => {
+    const status = areaDiffCases[i % areaDiffCases.length]?.status;
+    return {
+      id: `parcel-${p.id}`,
+      type: "polygon" as const,
+      coordinates: p.ring,
+      fill:
+        status === "critical"
+          ? "rgba(239,68,68,0.35)"
+          : status === "moderate"
+            ? "rgba(245,158,11,0.35)"
+            : "rgba(148,163,184,0.2)",
+      stroke: "#64748b",
+      strokeWidth: 1,
+      zIndex: 1,
+    };
+  });
+
+  const idx = 0;
+  const parcel = getCadastralParcels()[idx % getCadastralParcels().length];
+  if (parcel) {
+    overlays.push({
+      id: "highlight",
+      type: "polygon",
+      coordinates: parcel.ring,
+      fill: "rgba(236,72,153,0.35)",
+      stroke: "#db2777",
+      strokeWidth: 2.5,
+      zIndex: 3,
+    });
+  }
+
+  const totalDiff = areaDiffCases.reduce((s, c) => s + c.diffSqM, 0);
+  return {
+    overlays,
+    rows: areaDiffCases.map((row) => ({
+      surveyNo: row.surveyNo,
+      village: row.village,
+      fmbAreaSqM: row.fmbAreaSqM,
+      dgpsAreaSqM: row.dgpsAreaSqM,
+      diffSqM: row.diffSqM,
+      status: row.status,
+    })),
+    summary: `${areaDiffCases.length} parcels with area mismatch`,
+    badge: `Total Δ ${totalDiff} sq.m · ${selected?.surveyNo ?? "—"}`,
+    badgeTone: "warning",
+    columns: [
+      { key: "surveyNo", label: "Survey No" },
+      { key: "village", label: "Village" },
+      { key: "fmbAreaSqM", label: "FMB (sq.m)" },
+      { key: "dgpsAreaSqM", label: "DGPS (sq.m)" },
+      { key: "diffSqM", label: "Diff (sq.m)" },
+      { key: "status", label: "Status" },
+    ],
+  };
+}
+
+export function runEncroachmentDemo(): SpatialDemoOutput {
+  const encroachmentCases = getEncroachmentCases();
+  const selected = encroachmentCases[0];
+  const totalEncroached = encroachmentCases.reduce((s, c) => s + c.encroachedAreaSqM, 0);
+  const overlays: MapOverlay[] = [
+    ...getCadastralParcels().slice(0, 6).map((p) => ({
+      id: `parcel-${p.id}`,
+      type: "polygon" as const,
+      coordinates: p.ring,
+      fill: "rgba(148,163,184,0.15)",
+      stroke: "#94a3b8",
+      strokeWidth: 1,
+      zIndex: 1,
+    })),
+    {
+      id: "govt-land",
+      type: "polygon" as const,
+      coordinates: getGovtLandRing(),
+      fill: "rgba(245,158,11,0.3)",
+      stroke: "#d97706",
+      strokeWidth: 2,
+      zIndex: 2,
+    },
+  ];
+
+  if (selected) {
+    overlays.push({
+      id: "encroachment",
+      type: "polygon" as const,
+      coordinates: selected.ring,
+      fill: "rgba(239,68,68,0.55)",
+      stroke: "#dc2626",
+      strokeWidth: 2.5,
+      zIndex: 4,
+    });
+  }
+
+  return {
+    overlays,
+    rows: encroachmentCases.map((row) => ({
+      surveyNo: row.surveyNo,
+      govtLandType: row.govtLandType,
+      buildingType: row.buildingType,
+      encroachedAreaSqM: row.encroachedAreaSqM,
+      status: row.status,
+    })),
+    summary: `${encroachmentCases.length} encroachment cases found`,
+    badge: `${totalEncroached} sq.m total`,
+    badgeTone: "danger",
+    columns: [
+      { key: "surveyNo", label: "Survey No" },
+      { key: "govtLandType", label: "Govt land" },
+      { key: "buildingType", label: "Building" },
+      { key: "encroachedAreaSqM", label: "Area (sq.m)" },
+      { key: "status", label: "Status" },
+    ],
+  };
+}
+
+export function runOverlapDemo(): SpatialDemoOutput {
+  const overlapCases = getOverlapCases();
+  const selected = overlapCases[0];
+  const context = getSpatialContext();
+  const overlays: MapOverlay[] = selected
+    ? [
+        {
+          id: "parcel-a",
+          type: "polygon" as const,
+          coordinates: selected.ringA,
+          fill: "rgba(59,130,246,0.3)",
+          stroke: "#2563eb",
+          strokeWidth: 2,
+          zIndex: 2,
+        },
+        {
+          id: "parcel-b",
+          type: "polygon" as const,
+          coordinates: selected.ringB,
+          fill: "rgba(168,85,247,0.3)",
+          stroke: "#9333ea",
+          strokeWidth: 2,
+          zIndex: 2,
+        },
+        {
+          id: "overlap",
+          type: "polygon" as const,
+          coordinates: selected.overlapRing,
+          fill: "rgba(239,68,68,0.6)",
+          stroke: "#dc2626",
+          strokeWidth: 2.5,
+          zIndex: 4,
+        },
+      ]
+    : baseParcelOverlays(new Set());
+
+  return {
+    overlays,
+    rows: overlapCases.map((row) => ({
+      parcelA: row.parcelA,
+      parcelB: row.parcelB,
+      village: row.village,
+      overlapAreaSqM: row.overlapAreaSqM,
+      severity: row.severity,
+    })),
+    summary: selected
+      ? `Overlap found — Area = ${selected.overlapAreaSqM} sq.m`
+      : "No overlapping parcel pairs detected in cadastral dataset",
+    badge: `${overlapCases.length} pairs in ${context.village}`,
+    badgeTone: "danger",
+    columns: [
+      { key: "parcelA", label: "Parcel A" },
+      { key: "parcelB", label: "Parcel B" },
+      { key: "village", label: "Village" },
+      { key: "overlapAreaSqM", label: "Overlap (sq.m)" },
+      { key: "severity", label: "Severity" },
+    ],
+  };
+}
+
+export function runIntersectDemo(pairId?: string): SpatialDemoOutput {
+  const intersectPairs = getIntersectLayerPairs();
+  const pair = intersectPairs.find((p) => p.id === pairId) ?? intersectPairs[0];
+  if (!pair) {
+    return {
+      overlays: getBaseParcelOverlays(),
+      rows: [],
+      summary: "No intersect layers available for cadastral dataset",
+      columns: [],
+    };
+  }
+  const overlays: MapOverlay[] = [
+    {
+      id: "layer-a",
+      type: "polygon",
+      coordinates: pair.layerARing,
+      fill: "rgba(59,130,246,0.25)",
+      stroke: "#2563eb",
+      strokeWidth: 2,
+      zIndex: 2,
+    },
+    {
+      id: "layer-b",
+      type: "polygon",
+      coordinates: pair.layerBRing,
+      fill: "rgba(16,185,129,0.2)",
+      stroke: "#059669",
+      strokeWidth: 2,
+      lineDash: [5, 4],
+      zIndex: 2,
+    },
+    {
+      id: "intersect",
+      type: "polygon",
+      coordinates: pair.intersectRing,
+      fill: "rgba(234,179,8,0.55)",
+      stroke: "#ca8a04",
+      strokeWidth: 2.5,
+      zIndex: 4,
+    },
+  ];
+
+  return {
+    overlays,
+    rows: [{ layerA: pair.layerA, layerB: pair.layerB, intersectAreaSqM: pair.intersectAreaSqM, parcelCount: pair.parcelCount }],
+    summary: `Intersection: ${pair.intersectAreaSqM.toLocaleString()} sq.m`,
+    badge: `${pair.parcelCount} parcels affected`,
+    badgeTone: "warning",
+    columns: [
+      { key: "layerA", label: "Layer A" },
+      { key: "layerB", label: "Layer B" },
+      { key: "intersectAreaSqM", label: "Intersect area" },
+      { key: "parcelCount", label: "Parcels" },
+    ],
+  };
+}
+
+export function runStatisticsDemo(): SpatialDemoOutput {
+  const parcels = getCadastralParcels();
+  const context = getSpatialContext();
+  const dataset = getWorkbenchDataset();
+  const overlays: MapOverlay[] = parcels.map((p) => {
+    const attrs = dataset.parcelAttrs[p.id];
+    const isGovt = attrs ? isGovtParcel(attrs) : p.classification.toLowerCase().includes("gov");
+    return {
+      id: `parcel-${p.id}`,
+      type: "polygon" as const,
+      coordinates: p.ring,
+      fill: isGovt ? "rgba(245,158,11,0.4)" : "rgba(59,130,246,0.35)",
+      stroke: isGovt ? "#d97706" : "#2563eb",
+      strokeWidth: 1.5,
+      zIndex: 2,
+    };
+  });
+
+  const govtCount = parcels.filter((p) => {
+    const attrs = dataset.parcelAttrs[p.id];
+    return attrs ? isGovtParcel(attrs) : p.classification.toLowerCase().includes("gov");
+  }).length;
+  const privateCount = parcels.length - govtCount;
+
+  return {
+    overlays,
+    rows: [{ govtParcels: govtCount, privateParcels: privateCount, totalParcels: parcels.length }],
+    summary: `${context.village} — ${parcels.length} parcels in view`,
+    badge: `${govtCount} govt · ${privateCount} private`,
+    badgeTone: "neutral",
+    columns: [
+      { key: "totalParcels", label: "Total" },
+      { key: "govtParcels", label: "Government" },
+      { key: "privateParcels", label: "Private" },
+    ],
+  };
+}
+
 const DEMO_RUNNERS: Record<string, () => SpatialDemoOutput> = {
+  buffer: () => runBufferDemo(),
+  "area-diff": runAreaDiffDemo,
+  encroachment: runEncroachmentDemo,
+  overlap: runOverlapDemo,
+  intersect: () => runIntersectDemo(),
+  statistics: runStatisticsDemo,
   "contains-within": runContainsWithinDemo,
   touches: runTouchesDemo,
   disjoint: runDisjointDemo,
@@ -923,7 +1263,15 @@ const DEMO_RUNNERS: Record<string, () => SpatialDemoOutput> = {
   "route-proximity": runRouteProximityDemo,
 };
 
-export function runSpatialToolDemo(toolId: string): SpatialDemoOutput | null {
+export function runSpatialToolDemo(toolId: string): SpatialDemoOutput {
   const runner = DEMO_RUNNERS[toolId];
-  return runner ? runner() : null;
+  if (!runner) {
+    return {
+      overlays: getBaseParcelOverlays(),
+      rows: [],
+      summary: "Tool demo not available",
+      columns: [],
+    };
+  }
+  return runner();
 }

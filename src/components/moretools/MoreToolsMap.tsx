@@ -10,7 +10,7 @@ import { fromLonLat } from "ol/proj";
 import { Fill, Stroke, Style } from "ol/style";
 import { defaults as defaultControls } from "ol/control";
 import { createBasemapSource } from "../../lib/basemaps";
-import { SPATIAL_CONTEXT } from "../../data/moreToolsMock";
+import { SPATIAL_CONTEXT } from "../../data/cadastralSpatialData";
 
 export type MapOverlay = {
   id: string;

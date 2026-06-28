@@ -162,13 +162,10 @@ function SvgTreeNode({
   onSelect: (node: UlpinLineageNode) => void;
 }) {
   const onPath = node.onLineagePath ?? false;
-  const isCurrent = node.kind === "current";
   const displayUlpin = node.ulpin.slice(-4);
-  const label = isCurrent ? "Current" : node.ulpin.slice(-8);
 
   const fill = onPath ? "#ecfdf5" : "#ffffff";
   const stroke = onPath ? "#10b981" : "#cbd5e1";
-  const labelFill = isCurrent ? "#047857" : "#64748b";
 
   return (
     <g
@@ -201,16 +198,6 @@ function SvgTreeNode({
         fill={onPath ? "#064e3b" : "#1e293b"}
       >
         {displayUlpin}
-      </text>
-      <text
-        x={x}
-        y={y + NODE_RADIUS + 16}
-        textAnchor="middle"
-        dominantBaseline="hanging"
-        className={`pointer-events-none select-none ${isCurrent ? "text-[10px] font-semibold uppercase tracking-wide" : "font-mono text-[9px]"}`}
-        fill={labelFill}
-      >
-        {label}
       </text>
     </g>
   );

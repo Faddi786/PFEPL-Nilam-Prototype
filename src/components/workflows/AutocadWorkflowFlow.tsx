@@ -23,7 +23,7 @@ import {
   type MapPreview,
 } from "../../lib/autocadWorkflowGeometry";
 
-const STEPS = [
+export const AUTOCAD_WORKFLOW_STEPS = [
   "Distance angle method",
   "Arc method (adjacent)",
   "Arc method (opposite)",
@@ -32,7 +32,9 @@ const STEPS = [
   "Baseline / offset",
   "Subdivision & layers",
   "Merging plot",
-];
+] as const;
+
+const STEPS = AUTOCAD_WORKFLOW_STEPS;
 
 type LadderRow = { from: string; to: string; offsetDistance: string; chainage: string };
 type PointMeasureRow = { from1: string; dist1: string; from2: string; dist2: string };
@@ -273,14 +275,12 @@ function MapWorkspace({ title, preview }: { title: string; preview: MapPreview }
 function StepNav({
   step,
   onPrev,
-  onNext,
-  canNext,
+  onSave,
   status,
 }: {
   step: number;
   onPrev: () => void;
-  onNext: () => void;
-  canNext?: boolean;
+  onSave: () => void;
   status?: string;
 }) {
   return (
@@ -289,26 +289,26 @@ function StepNav({
         <SecondaryButton onClick={onPrev} disabled={step === 0}>
           Back
         </SecondaryButton>
-        {step < STEPS.length - 1 ? (
-          <PrimaryButton onClick={onNext} disabled={canNext === false}>
-            Next
-          </PrimaryButton>
-        ) : (
-          <PrimaryButton onClick={onNext}>
+        {step === STEPS.length - 1 ? (
+          <PrimaryButton onClick={onSave}>
             <span className="inline-flex items-center gap-1">
               <Save className="h-3.5 w-3.5" />
               Save mutation
             </span>
           </PrimaryButton>
-        )}
+        ) : null}
       </div>
       {status ? <p className="text-[11px] text-emerald-700">{status}</p> : null}
     </div>
   );
 }
 
-export default function AutocadWorkflowFlow() {
-  const [step, setStep] = useState(0);
+type AutocadWorkflowFlowProps = {
+  step: number;
+  onStepChange: (step: number) => void;
+};
+
+export default function AutocadWorkflowFlow({ step, onStepChange }: AutocadWorkflowFlowProps) {
   const [status, setStatus] = useState<string | null>(null);
 
   // Step 0 — Distance Angle
@@ -462,11 +462,15 @@ export default function AutocadWorkflowFlow() {
 
   function goNext() {
     setStatus(`Step "${STEPS[step]}" saved.`);
-    setStep((s) => Math.min(STEPS.length - 1, s + 1));
+    onStepChange(Math.min(STEPS.length - 1, step + 1));
   }
 
   function goPrev() {
-    setStep((s) => Math.max(0, s - 1));
+    onStepChange(Math.max(0, step - 1));
+  }
+
+  function saveMutation() {
+    setStatus(`Step "${STEPS[step]}" saved.`);
   }
 
   function togglePlot(plot: string) {
@@ -1023,7 +1027,7 @@ export default function AutocadWorkflowFlow() {
               </>
             ) : null}
 
-            <StepNav step={step} onPrev={goPrev} onNext={goNext} status={status ?? undefined} />
+            <StepNav step={step} onPrev={goPrev} onSave={saveMutation} status={status ?? undefined} />
           </motion.section>
         </AnimatePresence>
 

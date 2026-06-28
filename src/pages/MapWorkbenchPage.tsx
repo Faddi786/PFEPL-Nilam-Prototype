@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { motion } from "framer-motion";
 
-import { BarChart3, ChevronRight, Columns2, Database, Eye, FileScan, Flame, GitCompare, Grid3x3, Layers, LogOut, Network, Route, Shield, Smartphone, Sparkles, Users, Wrench } from "lucide-react";
+import { BarChart3, ChevronRight, Columns2, Database, Eye, Flame, GitCompare, Hammer, Layers, LogOut, Network, Route, Shield, Smartphone, Sparkles, Users, Wrench } from "lucide-react";
 
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
@@ -37,11 +37,17 @@ const PANEL_TRANSITION = { duration: 0.35, ease: [0.4, 0, 0.2, 1] as const };
 
 const PANEL_SEEN_KEY = "nilam:panel-seen";
 
-/** Set to true to show Admin in the right sidebar; /admin route remains available either way. */
-const SHOW_ADMIN_IN_SIDEBAR = false;
-
-/** Set to true to show Mutation Heatmap in the right sidebar; /heatmap route remains available either way. */
-const SHOW_MUTATION_HEATMAP_IN_SIDEBAR = false;
+/** Toggle right-sidebar nav items; routes remain available at their URLs either way. */
+const SIDEBAR_VISIBILITY = {
+  layers: false,
+  reports: false,
+  architecture: false,
+  swipe: false,
+  admin: false,
+  mutationHeatmap: false,
+  spatialTools: false,
+  transformation: false,
+} as const;
 
 
 
@@ -262,26 +268,28 @@ export default function MapWorkbenchPage() {
 
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
 
-              <CollapsiblePanel
+              {SIDEBAR_VISIBILITY.layers && (
+                <CollapsiblePanel
 
-                title="Layers"
+                  title="Layers"
 
-                icon={<Layers className="h-4 w-4" />}
+                  icon={<Layers className="h-4 w-4" />}
 
-                open={layersOpen}
+                  open={layersOpen}
 
-                onToggle={() => setLayersOpen((v) => !v)}
+                  onToggle={() => setLayersOpen((v) => !v)}
 
-              >
+                >
 
-                <LayerPanel
-                  layerGroups={layerGroups}
-                  activeRegion={region}
-                  onRegionChange={setRegion}
-                  onToggleLayer={toggleLayer}
-                />
+                  <LayerPanel
+                    layerGroups={layerGroups}
+                    activeRegion={region}
+                    onRegionChange={setRegion}
+                    onToggleLayer={toggleLayer}
+                  />
 
-              </CollapsiblePanel>
+                </CollapsiblePanel>
+              )}
 
 
 
@@ -327,7 +335,7 @@ export default function MapWorkbenchPage() {
 
               <Link
 
-                to="/reports"
+                to="/tools"
 
                 className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
 
@@ -335,15 +343,39 @@ export default function MapWorkbenchPage() {
 
                 <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
 
-                  <BarChart3 className="h-4 w-4 text-slate-600" />
+                  <Hammer className="h-4 w-4 text-slate-600" />
 
-                  Reports
+                  Tools
 
                 </span>
 
                 <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
 
               </Link>
+
+
+
+              {SIDEBAR_VISIBILITY.reports && (
+                <Link
+
+                  to="/reports"
+
+                  className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+
+                >
+
+                  <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+
+                    <BarChart3 className="h-4 w-4 text-slate-600" />
+
+                    Reports
+
+                  </span>
+
+                  <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+
+                </Link>
+              )}
 
 
 
@@ -368,28 +400,6 @@ export default function MapWorkbenchPage() {
                 <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
 
               </button>
-
-
-
-              <Link
-
-                to="/fmb-automation"
-
-                className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
-
-              >
-
-                <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
-
-                  <FileScan className="h-4 w-4 text-slate-600" />
-
-                  FMB Automation
-
-                </span>
-
-                <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
-
-              </Link>
 
 
 
@@ -437,7 +447,7 @@ export default function MapWorkbenchPage() {
 
 
 
-              {SHOW_ADMIN_IN_SIDEBAR && (
+              {SIDEBAR_VISIBILITY.admin && (
                 <Link
 
                   to="/admin"
@@ -483,95 +493,79 @@ export default function MapWorkbenchPage() {
 
 
 
-              <Link
+              {SIDEBAR_VISIBILITY.architecture && (
+                <Link
 
-                to="/architecture"
+                  to="/architecture"
 
-                className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+                  className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
 
-              >
+                >
 
-                <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
 
-                  <Network className="h-4 w-4 text-slate-600" />
+                    <Network className="h-4 w-4 text-slate-600" />
 
-                  Scale Architecture
+                    Scale Architecture
 
-                </span>
+                  </span>
 
-                <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+                  <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
 
-              </Link>
-
-
-
-              <Link
-
-                to="/warp"
-
-                className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
-
-              >
-
-                <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
-
-                  <Grid3x3 className="h-4 w-4 text-slate-600" />
-
-                  Georeferencing
-
-                </span>
-
-                <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
-
-              </Link>
+                </Link>
+              )}
 
 
 
-              <Link
+              {SIDEBAR_VISIBILITY.transformation && (
+                <Link
 
-                to="/transformation"
+                  to="/transformation"
 
-                className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+                  className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
 
-              >
+                >
 
-                <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
 
-                  <GitCompare className="h-4 w-4 text-slate-600" />
+                    <GitCompare className="h-4 w-4 text-slate-600" />
 
-                  Transform Tools
+                    Transform Tools
 
-                </span>
+                  </span>
 
-                <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+                  <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
 
-              </Link>
-
-
-
-              <Link
-
-                to="/swipe"
-
-                className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
-
-              >
-
-                <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
-
-                  <Columns2 className="h-4 w-4 text-slate-600" />
-
-                  Swipe Compare
-
-                </span>
-
-                <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
-
-              </Link>
+                </Link>
+              )}
 
 
 
-              {SHOW_MUTATION_HEATMAP_IN_SIDEBAR && (
+              {SIDEBAR_VISIBILITY.swipe && (
+                <Link
+
+                  to="/swipe"
+
+                  className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+
+                >
+
+                  <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+
+                    <Columns2 className="h-4 w-4 text-slate-600" />
+
+                    Swipe Compare
+
+                  </span>
+
+                  <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+
+                </Link>
+              )}
+
+
+
+              {SIDEBAR_VISIBILITY.mutationHeatmap && (
                 <Link
 
                   to="/heatmap"
@@ -595,25 +589,27 @@ export default function MapWorkbenchPage() {
 
 
 
-              <Link
+              {SIDEBAR_VISIBILITY.spatialTools && (
+                <Link
 
-                to="/more-tools"
+                  to="/more-tools"
 
-                className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
+                  className="group flex w-full items-center justify-between rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition hover:border-slate-200 hover:bg-white"
 
-              >
+                >
 
-                <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
 
-                  <Wrench className="h-4 w-4 text-slate-600" />
+                    <Wrench className="h-4 w-4 text-slate-600" />
 
-                  More Tools
+                    Spatial Tools
 
-                </span>
+                  </span>
 
-                <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
+                  <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:text-slate-700" />
 
-              </Link>
+                </Link>
+              )}
 
             </div>
 

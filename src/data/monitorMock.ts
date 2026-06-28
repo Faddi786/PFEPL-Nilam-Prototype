@@ -28,7 +28,7 @@ export type MonitorTab = {
 };
 
 export const MONITOR_TABS: MonitorTab[] = [
-  { id: "infrastructure", label: "Infrastructure", icon: "server", keywords: ["cpu", "ram", "disk", "network", "uptime", "load"] },
+  { id: "infrastructure", label: "Cloud Usage", icon: "cloud", keywords: ["cpu", "ram", "disk", "network", "uptime", "load", "cloud", "usage", "cost"] },
   { id: "kubernetes", label: "Kubernetes", icon: "k8s", keywords: ["pods", "nodes", "deployments", "scaling"] },
   { id: "docker", label: "Docker", icon: "docker", keywords: ["containers", "images", "cadvisor"] },
   { id: "database", label: "Database", icon: "database", keywords: ["postgresql", "postgis", "queries", "replication"] },
@@ -80,6 +80,69 @@ export const INFRA_METRICS: MetricGauge[] = [
   { label: "Network Out", value: 0.86, max: 10, unit: "Gbps", status: "healthy", sparkline: mkSpark(0.6, 1.1) },
   { label: "Load Avg", value: 2.4, max: 8, unit: "", status: "healthy", sparkline: mkSpark(1.8, 2.8) },
 ];
+
+export type CloudUsageMonth = { month: string; usage: number };
+
+/** Monthly cloud resource usage (normalized units) — last 12 months for trend forecast */
+export const CLOUD_USAGE_MONTHLY: CloudUsageMonth[] = [
+  { month: "Jul '24", usage: 42.1 },
+  { month: "Aug '24", usage: 43.8 },
+  { month: "Sep '24", usage: 45.2 },
+  { month: "Oct '24", usage: 47.6 },
+  { month: "Nov '24", usage: 49.1 },
+  { month: "Dec '24", usage: 51.4 },
+  { month: "Jan '25", usage: 54.2 },
+  { month: "Feb '25", usage: 56.8 },
+  { month: "Mar '25", usage: 59.5 },
+  { month: "Apr '25", usage: 62.1 },
+  { month: "May '25", usage: 65.4 },
+  { month: "Jun '25", usage: 67.8 },
+];
+
+export type CloudUsageForecast = {
+  chartData: { month: string; historical: number | null; forecast: number | null }[];
+  predictedNextMonth: number;
+  nextMonthLabel: string;
+  trendPerMonth: number;
+  trendPct: number;
+};
+
+export function buildCloudUsageForecast(months: CloudUsageMonth[] = CLOUD_USAGE_MONTHLY): CloudUsageForecast {
+  const n = months.length;
+  let sumX = 0;
+  let sumY = 0;
+  let sumXY = 0;
+  let sumX2 = 0;
+  for (let i = 0; i < n; i++) {
+    sumX += i;
+    sumY += months[i].usage;
+    sumXY += i * months[i].usage;
+    sumX2 += i * i;
+  }
+  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+  const intercept = (sumY - slope * sumX) / n;
+  const predictedNextMonth = Math.round((slope * n + intercept) * 10) / 10;
+  const last = months[n - 1];
+  const first = months[0];
+  const trendPerMonth = Math.round(slope * 10) / 10;
+  const trendPct = Math.round(((last.usage - first.usage) / first.usage) * 1000) / 10;
+  const nextMonthLabel = "Jul '25";
+
+  const chartData: CloudUsageForecast["chartData"] = months.map((m) => ({
+    month: m.month,
+    historical: m.usage,
+    forecast: null,
+  }));
+  chartData[n - 1].forecast = last.usage;
+  const forecastPoint: CloudUsageForecast["chartData"][number] = {
+    month: nextMonthLabel,
+    historical: null,
+    forecast: predictedNextMonth,
+  };
+  chartData.push(forecastPoint);
+
+  return { chartData, predictedNextMonth, nextMonthLabel, trendPerMonth, trendPct };
+}
 
 export const INFRA_SERVERS: ServerHost[] = [
   { name: "doslr-app-01", role: "Spring Boot API", status: "healthy", uptime: "26 days 4h", cpu: 38, ram: 62, disk: 54, temp: 42, powerW: 185 },

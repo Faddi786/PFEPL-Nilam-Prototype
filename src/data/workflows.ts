@@ -1,6 +1,8 @@
 export type WorkflowId =
+  | "parcel-creation-management"
   | "online-mutation"
   | "georeferencing"
+  | "fmb-automation"
   | "certified-extract"
   | "anomaly-pipeline"
   | "search-rbac"
@@ -19,6 +21,19 @@ export type WorkflowConfig = {
 
 export const WORKFLOW_CONFIGS: WorkflowConfig[] = [
   {
+    id: "parcel-creation-management",
+    title: "Parcel Creation & Management",
+    description:
+      "End-to-end parcel lifecycle — FMB extraction, georeferencing, anomaly QC, optional mutation, and cadastral editing.",
+    defaultSteps: [
+      "FMB extract",
+      "Georeference",
+      "Anomaly QC",
+      "Mutation & documents",
+      "Cadastral edit",
+    ],
+  },
+  {
     id: "online-mutation",
     title: "Mutation",
     description: "Back-office officer splits parcel geometry, reviews before/after, and approves or rejects the mutation.",
@@ -33,8 +48,14 @@ export const WORKFLOW_CONFIGS: WorkflowConfig[] = [
   {
     id: "georeferencing",
     title: "Georeferencing",
-    description: "Upload DGPS field data, adjust control points on the map, and accept the georeferencing solution.",
-    defaultSteps: ["Upload data", "Adjust DGPS points", "Accept"],
+    description: "Rubber-sheet warp FMB scans to orthomosaic anchors — place GCPs, run gdalwarp, and verify RMS.",
+    defaultSteps: ["Load FMB scan", "Place GCPs", "Run gdalwarp", "Verify RMS"],
+  },
+  {
+    id: "fmb-automation",
+    title: "FMB Automation",
+    description: "AI-assisted extraction of geometry and attributes from Field Measurement Books with officer review.",
+    defaultSteps: ["Upload", "Extract", "Review", "Approve"],
   },
   {
     id: "certified-extract",
@@ -100,7 +121,11 @@ export const WORKFLOW_LOOKUP = Object.fromEntries(WORKFLOW_CONFIGS.map((cfg) => 
 
 /** Workflows hidden from sidebar panel and page-header switcher (routes may still exist). */
 export const HIDDEN_PANEL_WORKFLOW_IDS = new Set<WorkflowId>([
+  "online-mutation",
   "georeferencing",
+  "fmb-automation",
+  "anomaly-pipeline",
+  "autocad",
   "certified-extract",
   "search-rbac",
   "citizen-search",
@@ -113,5 +138,8 @@ export function getVisiblePanelWorkflows(): WorkflowConfig[] {
 }
 
 export function getWorkflowRoute(id: WorkflowId): string {
-  return id === "audit-log" ? "/workflows/audit-log" : `/workflows/${id}`;
+  if (id === "audit-log") return "/workflows/audit-log";
+  if (id === "fmb-automation") return "/fmb-automation";
+  if (id === "georeferencing") return "/georeferencing";
+  return `/workflows/${id}`;
 }

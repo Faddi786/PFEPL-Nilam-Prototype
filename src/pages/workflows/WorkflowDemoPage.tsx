@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCheck, CircleAlert, Clock3, Upload } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -9,6 +9,8 @@ import MutationEditMap, { type MutationEditMapHandle, type MutationMapGeometry }
 import GeoreferencingMap from "../../components/workflows/GeoreferencingMap";
 import AnomalyPipelineFlow from "../../components/workflows/AnomalyPipelineFlow";
 import AutocadWorkflowFlow from "../../components/workflows/AutocadWorkflowFlow";
+import AutocadStepSwitcher from "../../components/workflows/AutocadStepSwitcher";
+import ParcelCreationManagementFlow from "../../components/workflows/ParcelCreationManagementFlow";
 import UlpinSplitDiagram from "../../components/workflows/UlpinSplitDiagram";
 import { DEFAULT_REGION_KEY } from "../../data/mockData";
 import { getWorkbenchRegionDatasetSync } from "../../data/workbenchParcels";
@@ -479,11 +481,16 @@ export default function WorkflowDemoPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: WorkflowId }>();
   const visibleWorkflows = useMemo(() => getVisiblePanelWorkflows(), []);
+  const [autocadStep, setAutocadStep] = useState(0);
 
   const workflow = useMemo(() => {
     if (!id) return null;
     return WORKFLOW_LOOKUP[id];
   }, [id]);
+
+  useEffect(() => {
+    setAutocadStep(0);
+  }, [workflow?.id]);
 
   if (!workflow) {
     return (
@@ -498,25 +505,39 @@ export default function WorkflowDemoPage() {
     );
   }
 
+  const hideHeaderCopy =
+    workflow.id === "online-mutation" ||
+    workflow.id === "autocad" ||
+    workflow.id === "parcel-creation-management";
+
   return (
     <div className="h-full overflow-y-auto bg-[#F7F7F5] p-4 pb-8 lg:p-5">
       <div className="mx-auto flex max-w-[1450px] flex-col gap-4">
         <section className="rounded-2xl border border-white/70 bg-white/85 p-4 shadow-[0_8px_30px_rgba(0,0,0,0.06)] backdrop-blur-sm">
           <div className="mb-4">
             <WorkflowPageHeader
-              title={workflow.id === "online-mutation" ? "" : workflow.title}
-              description={workflow.id === "online-mutation" ? undefined : workflow.description}
+              title={hideHeaderCopy ? "" : workflow.title}
+              description={hideHeaderCopy ? undefined : workflow.description}
               currentWorkflowId={workflow.id}
               workflows={visibleWorkflows}
+              headerActions={
+                workflow.id === "autocad" ? (
+                  <AutocadStepSwitcher step={autocadStep} onStepChange={setAutocadStep} />
+                ) : undefined
+              }
             />
           </div>
 
           <div key={workflow.id}>
+            {workflow.id === "parcel-creation-management" ? <ParcelCreationManagementFlow /> : null}
             {workflow.id === "online-mutation" ? <OnlineMutationFlow /> : null}
             {workflow.id === "georeferencing" ? <GeoreferencingFlow /> : null}
             {workflow.id === "anomaly-pipeline" ? <AnomalyPipelineFlow /> : null}
-            {workflow.id === "autocad" ? <AutocadWorkflowFlow /> : null}
-            {workflow.id !== "online-mutation" &&
+            {workflow.id === "autocad" ? (
+              <AutocadWorkflowFlow step={autocadStep} onStepChange={setAutocadStep} />
+            ) : null}
+            {workflow.id !== "parcel-creation-management" &&
+            workflow.id !== "online-mutation" &&
             workflow.id !== "georeferencing" &&
             workflow.id !== "anomaly-pipeline" &&
             workflow.id !== "autocad" ? (

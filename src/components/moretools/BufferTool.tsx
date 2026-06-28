@@ -2,12 +2,12 @@ import { useMemo, useState } from "react";
 import MoreToolsMap, { type MapOverlay } from "./MoreToolsMap";
 import { EmptyResults, ResultsHeader, RunAnalysisButton, ToolShell } from "./MoreToolsShared";
 import {
-  BUFFER_FEATURES,
-  DEMO_PARCELS,
+  getBufferFeatures,
+  getCadastralParcels,
   buildBufferPolygon,
   getParcelsInBuffer,
   type BufferFeatureType,
-} from "../../data/moreToolsMock";
+} from "../../data/cadastralSpatialData";
 
 export default function BufferTool() {
   const [featureType, setFeatureType] = useState<BufferFeatureType>("road");
@@ -21,7 +21,7 @@ export default function BufferTool() {
   );
 
   const overlays = useMemo((): MapOverlay[] => {
-    const items: MapOverlay[] = DEMO_PARCELS.map((p) => ({
+    const items: MapOverlay[] = getCadastralParcels().map((p) => ({
       id: `parcel-${p.id}`,
       type: "polygon",
       coordinates: p.ring,
@@ -47,12 +47,12 @@ export default function BufferTool() {
       }
     }
 
-    const line = BUFFER_FEATURES[featureType].line;
+    const line = getBufferFeatures()[featureType].line;
     items.push({
       id: "feature-line",
       type: "line",
       coordinates: line,
-      stroke: BUFFER_FEATURES[featureType].color,
+      stroke: getBufferFeatures()[featureType].color,
       strokeWidth: 4,
       zIndex: 5,
     });
@@ -89,9 +89,9 @@ export default function BufferTool() {
               }}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
             >
-              {(Object.keys(BUFFER_FEATURES) as BufferFeatureType[]).map((key) => (
+              {(Object.keys(getBufferFeatures()) as BufferFeatureType[]).map((key) => (
                 <option key={key} value={key}>
-                  {BUFFER_FEATURES[key].label}
+                  {getBufferFeatures()[key].label}
                 </option>
               ))}
             </select>
@@ -126,7 +126,7 @@ export default function BufferTool() {
           <>
             <ResultsHeader
               title={`${parcelsInBuffer.length} parcels within ${distanceM} m buffer`}
-              badge={`${BUFFER_FEATURES[featureType].label}`}
+              badge={`${getBufferFeatures()[featureType].label}`}
               badgeTone={parcelsInBuffer.length > 0 ? "warning" : "success"}
             />
             <div className="overflow-x-auto">

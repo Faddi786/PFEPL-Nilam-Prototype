@@ -48,25 +48,27 @@ export default function ThematicLayersDropdown({ layers, onToggle }: Props) {
               Thematic Overlays
             </p>
           </div>
-          {layers.map((layer) => (
-            <label
-              key={layer.id}
-              className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-xs text-slate-700 transition hover:bg-slate-50"
-            >
-              <input
-                type="checkbox"
-                checked={layer.visible}
-                onChange={(event) => onToggle(layer.id, event.target.checked)}
-                className="h-3.5 w-3.5 rounded border-slate-300 text-[#1A1A1A] focus:ring-[#1A1A1A]/20"
-              />
-              <span>{layer.label}</span>
-            </label>
-          ))}
+          <div className="flex flex-col gap-y-0.5 py-1">
+            {layers.map((layer) => (
+              <label
+                key={layer.id}
+                className="flex cursor-pointer items-center gap-2.5 px-3 py-2.5 text-[10px] text-slate-700 transition hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  checked={layer.visible}
+                  onChange={(event) => onToggle(layer.id, event.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-[#1A1A1A] focus:ring-[#1A1A1A]/20"
+                />
+                <span>{layer.label}</span>
+              </label>
+            ))}
+          </div>
           <div className="border-t border-slate-100">
             <button
               type="button"
               onClick={handleToggleAll}
-              className="flex w-full items-center px-3 py-2 text-left text-xs text-slate-700 transition hover:bg-slate-50"
+              className="flex w-full items-center px-3 py-2.5 text-left text-xs text-slate-700 transition hover:bg-slate-50"
             >
               {allVisible ? "Deselect all" : "Select all"}
             </button>

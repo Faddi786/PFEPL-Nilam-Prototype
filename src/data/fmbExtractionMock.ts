@@ -1,6 +1,14 @@
 export type ConfidenceLevel = "high" | "medium" | "low";
 
-export type FmbPoint = { id: string; x: number; y: number; confidence: number; label: string };
+export type FmbPoint = {
+  id: string;
+  x: number;
+  y: number;
+  confidence: number;
+  label: string;
+  /** Larger green anchor handle (A, B, F) */
+  isAnchor?: boolean;
+};
 
 export type FmbEdge = {
   id: string;
@@ -23,12 +31,38 @@ export type FmbTextField = {
   correctHint?: string;
 };
 
+export type FmbCanvasLabel = {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  confidence: number;
+  kind: "parcel" | "measurement" | "anchor" | "adjacent";
+  /** When set, editing this label updates the linked edge length */
+  linkedEdgeId?: string;
+};
+
 export type FmbExtractionState = {
   vertices: FmbPoint[];
   edges: FmbEdge[];
   textFields: FmbTextField[];
   parcelNumber: { value: string; confidence: number };
+  canvasLabels: FmbCanvasLabel[];
 };
+
+/** SVG viewBox matches fmb-extract-sample.png (606×382) */
+export const FMB_CANVAS_VIEWBOX = { width: 606, height: 382 } as const;
+
+export const FMB_BACKGROUND_URL = "/assets/fmb/fmb-extract-sample.png";
+
+/** Canvas overlay palette — matches FMB extraction reference diagram */
+export const FMB_ORANGE = "#f97316";
+export const FMB_GREEN = "#22c55e";
+export const FMB_BLUE = "#2563eb";
+export const FMB_HIGHLIGHTED_EDGE_ID = "eAF";
+
+/** Attribute panel fields shown in the extraction review demo */
+export const FMB_PANEL_FIELD_IDS = ["owner", "area", "surveySubDiv"] as const;
 
 export function getConfidenceLevel(score: number): ConfidenceLevel {
   if (score >= 85) return "high";
@@ -62,58 +96,198 @@ export const FMB_WORKFLOW_STEPS = ["Upload", "Extract", "Review", "Approve"] as 
 export function createInitialFmbExtraction(): FmbExtractionState {
   return {
     vertices: [
-      { id: "v1", x: 120, y: 280, confidence: 96, label: "P1" },
-      { id: "v2", x: 320, y: 260, confidence: 94, label: "P2" },
-      { id: "v3", x: 380, y: 140, confidence: 91, label: "P3" },
-      { id: "v4", x: 240, y: 80, confidence: 88, label: "P4" },
-      { id: "v5", x: 100, y: 160, confidence: 93, label: "P5" },
+      { id: "vA", x: 112, y: 60, confidence: 96, label: "A", isAnchor: true },
+      { id: "vB", x: 522, y: 139, confidence: 94, label: "B", isAnchor: true },
+      { id: "vBR", x: 525, y: 184, confidence: 91, label: "" },
+      { id: "vBD", x: 490, y: 242, confidence: 88, label: "" },
+      { id: "vD", x: 340, y: 348, confidence: 93, label: "" },
+      { id: "vE", x: 110, y: 328, confidence: 95, label: "" },
+      { id: "vF", x: 111, y: 185, confidence: 92, label: "F", isAnchor: true },
+      { id: "vI1", x: 130, y: 205, confidence: 84, label: "" },
+      { id: "vI2", x: 370, y: 108, confidence: 79, label: "" },
+      { id: "vI3", x: 458, y: 187, confidence: 82, label: "" },
+      { id: "vI4", x: 200, y: 282, confidence: 86, label: "" },
+      { id: "vI5", x: 170, y: 243, confidence: 80, label: "" },
+      { id: "vI6", x: 400, y: 207, confidence: 77, label: "" },
     ],
     edges: [
       {
-        id: "e1",
-        from: "v1",
-        to: "v2",
-        lengthM: 42.6,
-        lengthConfidence: 89,
-        bearing: "N 72° 14′ E",
+        id: "eAB",
+        from: "vA",
+        to: "vB",
+        lengthM: 138.2,
+        lengthConfidence: 91,
+        bearing: "N 82° E",
         bearingConfidence: 78,
       },
       {
-        id: "e2",
-        from: "v2",
-        to: "v3",
-        lengthM: 28.4,
-        lengthConfidence: 82,
-        bearing: "N 18° 06′ E",
-        bearingConfidence: 74,
+        id: "eAF",
+        from: "vA",
+        to: "vF",
+        lengthM: 24.2,
+        lengthConfidence: 89,
+        bearing: "S 12° W",
+        bearingConfidence: 85,
       },
       {
-        id: "e3",
-        from: "v3",
-        to: "v4",
-        lengthM: 35.1,
-        lengthConfidence: 91,
-        bearing: "N 58° 42′ W",
-        bearingConfidence: 81,
+        id: "eFE",
+        from: "vF",
+        to: "vE",
+        lengthM: 34.2,
+        lengthConfidence: 87,
+        bearing: "S 8° E",
+        bearingConfidence: 82,
       },
       {
-        id: "e4",
-        from: "v4",
-        to: "v5",
-        lengthM: 31.8,
-        lengthConfidence: 75,
-        bearing: "S 82° 30′ W",
+        id: "eED",
+        from: "vE",
+        to: "vD",
+        lengthM: 60.4,
+        lengthConfidence: 90,
+        bearing: "N 78° E",
+        bearingConfidence: 80,
+      },
+      {
+        id: "eBR",
+        from: "vB",
+        to: "vBR",
+        lengthM: 73.0,
+        lengthConfidence: 88,
+        bearing: "S 6° E",
+        bearingConfidence: 76,
+      },
+      {
+        id: "eBRBD",
+        from: "vBR",
+        to: "vBD",
+        lengthM: 54.2,
+        lengthConfidence: 72,
+        bearing: "S 22° W",
+        bearingConfidence: 68,
+      },
+      {
+        id: "eBDD",
+        from: "vBD",
+        to: "vD",
+        lengthM: 71.0,
+        lengthConfidence: 74,
+        bearing: "S 38° W",
         bearingConfidence: 70,
       },
       {
-        id: "e5",
-        from: "v5",
-        to: "v1",
-        lengthM: 38.2,
-        lengthConfidence: 86,
-        bearing: "S 24° 08′ E",
-        bearingConfidence: 85,
+        id: "eI1I2",
+        from: "vI1",
+        to: "vI2",
+        lengthM: 71.0,
+        lengthConfidence: 76,
+        bearing: "N 72° E",
+        bearingConfidence: 71,
       },
+      {
+        id: "eI2B",
+        from: "vI2",
+        to: "vB",
+        lengthM: 13.6,
+        lengthConfidence: 69,
+        bearing: "N 15° E",
+        bearingConfidence: 65,
+      },
+      {
+        id: "eI1F",
+        from: "vI1",
+        to: "vF",
+        lengthM: 27.0,
+        lengthConfidence: 83,
+        bearing: "S 18° W",
+        bearingConfidence: 79,
+      },
+      {
+        id: "eI1I5",
+        from: "vI1",
+        to: "vI5",
+        lengthM: 54.2,
+        lengthConfidence: 78,
+        bearing: "S 5° E",
+        bearingConfidence: 74,
+      },
+      {
+        id: "eI5E",
+        from: "vI5",
+        to: "vE",
+        lengthM: 34.4,
+        lengthConfidence: 81,
+        bearing: "S 12° W",
+        bearingConfidence: 77,
+      },
+      {
+        id: "eI1I4",
+        from: "vI1",
+        to: "vI4",
+        lengthM: 69.4,
+        lengthConfidence: 75,
+        bearing: "S 42° E",
+        bearingConfidence: 72,
+      },
+      {
+        id: "eI4D",
+        from: "vI4",
+        to: "vD",
+        lengthM: 60.4,
+        lengthConfidence: 79,
+        bearing: "S 28° E",
+        bearingConfidence: 73,
+      },
+      {
+        id: "eI4I3",
+        from: "vI4",
+        to: "vI3",
+        lengthM: 51.2,
+        lengthConfidence: 71,
+        bearing: "N 35° E",
+        bearingConfidence: 67,
+      },
+      {
+        id: "eI3BR",
+        from: "vI3",
+        to: "vBR",
+        lengthM: 27.0,
+        lengthConfidence: 77,
+        bearing: "N 22° W",
+        bearingConfidence: 73,
+      },
+      {
+        id: "eI4I6",
+        from: "vI4",
+        to: "vI6",
+        lengthM: 48.0,
+        lengthConfidence: 73,
+        bearing: "S 18° E",
+        bearingConfidence: 69,
+      },
+      {
+        id: "eI6D",
+        from: "vI6",
+        to: "vD",
+        lengthM: 18.4,
+        lengthConfidence: 68,
+        bearing: "S 45° W",
+        bearingConfidence: 64,
+      },
+    ],
+    canvasLabels: [
+      { id: "lbl138", text: "138.2", x: 314, y: 88, confidence: 91, kind: "measurement", linkedEdgeId: "eAB" },
+      { id: "lbl24", text: "24.2", x: 92, y: 118, confidence: 89, kind: "measurement", linkedEdgeId: "eAF" },
+      { id: "lbl73", text: "73.0", x: 532, y: 158, confidence: 88, kind: "measurement", linkedEdgeId: "eBR" },
+      { id: "lbl71", text: "71.0", x: 250, y: 148, confidence: 76, kind: "measurement", linkedEdgeId: "eI1I2" },
+      { id: "lbl27", text: "27.0", x: 100, y: 192, confidence: 83, kind: "measurement", linkedEdgeId: "eI1F" },
+      { id: "lbl542", text: "54.2", x: 504, y: 206, confidence: 72, kind: "measurement", linkedEdgeId: "eBRBD" },
+      { id: "lbl694", text: "69.4", x: 168, y: 236, confidence: 75, kind: "measurement", linkedEdgeId: "eI1I4" },
+      { id: "lbl512", text: "51.2", x: 332, y: 228, confidence: 71, kind: "measurement", linkedEdgeId: "eI4I3" },
+      { id: "lbl1A1", text: "1A1", x: 155, y: 248, confidence: 92, kind: "parcel" },
+      { id: "lbl1B", text: "1B", x: 395, y: 95, confidence: 88, kind: "parcel" },
+      { id: "lbl2A1", text: "2A1", x: 478, y: 168, confidence: 85, kind: "parcel" },
+      { id: "lbl2A1A", text: "2A1A", x: 498, y: 152, confidence: 82, kind: "parcel" },
+      { id: "lbl2A1B", text: "2A1B", x: 468, y: 182, confidence: 80, kind: "parcel" },
     ],
     textFields: [
       { id: "owner", label: "Owner name", value: "Rajesh Kumar Sharma", confidence: 94 },
@@ -121,7 +295,7 @@ export function createInitialFmbExtraction(): FmbExtractionState {
       {
         id: "surveySubDiv",
         label: "Survey subdivision",
-        value: "142/3A",
+        value: "asd",
         confidence: 58,
         intentionalError: true,
         correctHint: "142/2B",
@@ -136,8 +310,9 @@ export function createInitialFmbExtraction(): FmbExtractionState {
 
 export function countExtractionSummary(state: FmbExtractionState) {
   const geometryElements = state.vertices.length + state.edges.length * 2;
+  const labelElements = state.canvasLabels.length;
   const textElements = state.textFields.length + 1;
-  const total = geometryElements + textElements;
+  const total = geometryElements + labelElements + textElements;
   const needsReview = [
     ...state.vertices.filter((v) => getConfidenceLevel(v.confidence) !== "high"),
     ...state.edges.filter(
@@ -145,6 +320,7 @@ export function countExtractionSummary(state: FmbExtractionState) {
         getConfidenceLevel(e.lengthConfidence) !== "high" ||
         getConfidenceLevel(e.bearingConfidence) !== "high",
     ),
+    ...state.canvasLabels.filter((l) => getConfidenceLevel(l.confidence) !== "high"),
     ...state.textFields.filter((f) => getConfidenceLevel(f.confidence) !== "high"),
   ].length;
   const errors = state.textFields.filter((f) => f.intentionalError).length;

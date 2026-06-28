@@ -9,14 +9,16 @@ import {
   Upload,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import WorkflowSwitcher from "../../components/WorkflowSwitcher";
 import FmbAttributePanel from "../../components/fmb/FmbAttributePanel";
-import FmbExtractionCanvas, { type CanvasTool } from "../../components/fmb/FmbExtractionCanvas";
+import FmbExtractionCanvas from "../../components/fmb/FmbExtractionCanvas";
 import {
   countExtractionSummary,
   createInitialFmbExtraction,
   FMB_WORKFLOW_STEPS,
   type FmbExtractionState,
 } from "../../data/fmbExtractionMock";
+import { getVisiblePanelWorkflows } from "../../data/workflows";
 
 type WorkflowPhase = "upload" | "extracting" | "review" | "approved";
 
@@ -93,13 +95,13 @@ function FmbSketchPreview({ visible }: { visible: boolean }) {
 }
 
 export default function FmbAutomationPage() {
+  const visibleWorkflows = useMemo(() => getVisiblePanelWorkflows(), []);
   const [phase, setPhase] = useState<WorkflowPhase>("upload");
   const [extractionState, setExtractionState] = useState<FmbExtractionState>(() =>
     createInitialFmbExtraction(),
   );
   const [selectedVertexId, setSelectedVertexId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const [activeTool, setActiveTool] = useState<CanvasTool>("select");
   const [submitted, setSubmitted] = useState(false);
 
   const summary = useMemo(() => countExtractionSummary(extractionState), [extractionState]);
@@ -158,31 +160,37 @@ export default function FmbAutomationPage() {
             </div>
           </div>
 
-          {phase === "upload" ? (
-            <button
-              type="button"
-              onClick={startExtraction}
-              className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700"
-            >
-              <Upload className="h-4 w-4" />
-              Upload &amp; Extract
-            </button>
-          ) : phase === "extracting" ? (
-            <span className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              AI extraction running…
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitted}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              {submitted ? "Parcel created" : "Accept & Create Parcel"}
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {phase === "upload" ? (
+              <button
+                type="button"
+                onClick={startExtraction}
+                className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700"
+              >
+                <Upload className="h-4 w-4" />
+                Upload &amp; Extract
+              </button>
+            ) : phase === "extracting" ? (
+              <span className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                AI extraction running…
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitted}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                {submitted ? "Parcel created" : "Accept & Create Parcel"}
+              </button>
+            )}
+            <WorkflowSwitcher
+              currentWorkflowId="fmb-automation"
+              workflows={visibleWorkflows}
+            />
+          </div>
         </div>
 
         {/* Step indicator */}
@@ -241,8 +249,6 @@ export default function FmbAutomationPage() {
                 selectedEdgeId={selectedEdgeId}
                 onSelectVertex={setSelectedVertexId}
                 onSelectEdge={setSelectedEdgeId}
-                activeTool={activeTool}
-                onToolChange={setActiveTool}
                 extractionVisible={phase !== "upload"}
               />
             </div>

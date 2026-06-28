@@ -1,22 +1,17 @@
-import { useCallback, useRef, useState } from "react";
-import {
-  Hand,
-  MousePointer2,
-  Move,
-  PenLine,
-  Plus,
-  Trash2,
-  Undo2,
-} from "lucide-react";
+import { useRef, useState } from "react";
 import clsx from "clsx";
 import {
-  confidenceStrokeColor,
+  FMB_BACKGROUND_URL,
+  FMB_BLUE,
+  FMB_CANVAS_VIEWBOX,
+  FMB_GREEN,
+  FMB_HIGHLIGHTED_EDGE_ID,
+  FMB_ORANGE,
+  type FmbCanvasLabel,
   type FmbEdge,
   type FmbExtractionState,
   type FmbPoint,
 } from "../../data/fmbExtractionMock";
-
-export type CanvasTool = "select" | "move" | "addPoint" | "drawLine" | "delete" | "pan";
 
 type Props = {
   state: FmbExtractionState;
@@ -25,24 +20,27 @@ type Props = {
   selectedEdgeId: string | null;
   onSelectVertex: (id: string | null) => void;
   onSelectEdge: (id: string | null) => void;
-  activeTool: CanvasTool;
-  onToolChange: (tool: CanvasTool) => void;
   extractionVisible: boolean;
 };
 
-type HistoryEntry = FmbExtractionState;
-
-const TOOLS: { id: CanvasTool; label: string; icon: typeof MousePointer2 }[] = [
-  { id: "select", label: "Select", icon: MousePointer2 },
-  { id: "move", label: "Move vertex", icon: Move },
-  { id: "addPoint", label: "Add point", icon: Plus },
-  { id: "drawLine", label: "Draw boundary", icon: PenLine },
-  { id: "delete", label: "Delete", icon: Trash2 },
-  { id: "pan", label: "Pan", icon: Hand },
-];
-
 function edgeMidpoint(from: FmbPoint, to: FmbPoint) {
   return { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+}
+
+function labelFill(kind: FmbCanvasLabel["kind"]) {
+  if (kind === "parcel" || kind === "anchor") return FMB_BLUE;
+  return FMB_ORANGE;
+}
+
+function labelFontSize(kind: FmbCanvasLabel["kind"]) {
+  if (kind === "parcel") return 11;
+  if (kind === "anchor") return 12;
+  return 9;
+}
+
+function labelFontWeight(kind: FmbCanvasLabel["kind"]) {
+  if (kind === "parcel" || kind === "anchor") return 700;
+  return 600;
 }
 
 export default function FmbExtractionCanvas({
@@ -52,33 +50,12 @@ export default function FmbExtractionCanvas({
   selectedEdgeId,
   onSelectVertex,
   onSelectEdge,
-  activeTool,
-  onToolChange,
   extractionVisible,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
   const [dragVertexId, setDragVertexId] = useState<string | null>(null);
-  const [drawFromId, setDrawFromId] = useState<string | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
-
-  const pushHistory = useCallback(
-    (prev: FmbExtractionState) => {
-      setHistory((h) => [...h.slice(-19), structuredClone(prev)]);
-    },
-    [],
-  );
-
-  const undo = useCallback(() => {
-    setHistory((h) => {
-      if (!h.length) return h;
-      const last = h[h.length - 1];
-      onStateChange(last);
-      return h.slice(0, -1);
-    });
-  }, [onStateChange]);
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
 
   const vertexMap = Object.fromEntries(state.vertices.map((v) => [v.id, v]));
 
@@ -90,313 +67,236 @@ export default function FmbExtractionCanvas({
     pt.y = clientY;
     const ctm = svg.getScreenCTM();
     if (!ctm) return { x: 0, y: 0 };
-    const inv = ctm.inverse();
-    const local = pt.matrixTransform(inv);
-    return { x: local.x - pan.x, y: local.y - pan.y };
-  }
-
-  function addVertex(x: number, y: number) {
-    pushHistory(state);
-    const id = `v${Date.now()}`;
-    const newVertex: FmbPoint = {
-      id,
-      x,
-      y,
-      confidence: 72,
-      label: `P${state.vertices.length + 1}`,
-    };
-    onStateChange({ ...state, vertices: [...state.vertices, newVertex] });
-    onSelectVertex(id);
-  }
-
-  function addEdge(from: string, to: string) {
-    if (from === to) return;
-    const exists = state.edges.some(
-      (e) => (e.from === from && e.to === to) || (e.from === to && e.to === from),
-    );
-    if (exists) return;
-    pushHistory(state);
-    const edge: FmbEdge = {
-      id: `e${Date.now()}`,
-      from,
-      to,
-      lengthM: 0,
-      lengthConfidence: 68,
-      bearing: "—",
-      bearingConfidence: 65,
-    };
-    onStateChange({ ...state, edges: [...state.edges, edge] });
-    onSelectEdge(edge.id);
-    setDrawFromId(null);
-  }
-
-  function deleteVertex(vertexId: string) {
-    pushHistory(state);
-    onStateChange({
-      ...state,
-      vertices: state.vertices.filter((v) => v.id !== vertexId),
-      edges: state.edges.filter((e) => e.from !== vertexId && e.to !== vertexId),
-    });
-    onSelectVertex(null);
-  }
-
-  function deleteEdge(edgeId: string) {
-    pushHistory(state);
-    onStateChange({ ...state, edges: state.edges.filter((e) => e.id !== edgeId) });
-    onSelectEdge(null);
-  }
-
-  function handleCanvasClick(e: React.MouseEvent<SVGSVGElement>) {
-    if (activeTool === "pan" || dragVertexId) return;
-    const pt = svgPoint(e.clientX, e.clientY);
-
-    if (activeTool === "addPoint") {
-      addVertex(pt.x, pt.y);
-      return;
-    }
-
-    if (activeTool === "select" || activeTool === "move") {
-      onSelectVertex(null);
-      onSelectEdge(null);
-    }
+    const local = pt.matrixTransform(ctm.inverse());
+    return { x: local.x, y: local.y };
   }
 
   function handleVertexMouseDown(e: React.MouseEvent, vertexId: string) {
     e.stopPropagation();
-    if (activeTool === "delete") {
-      deleteVertex(vertexId);
-      return;
-    }
-    if (activeTool === "drawLine") {
-      if (!drawFromId) {
-        setDrawFromId(vertexId);
-        onSelectVertex(vertexId);
-      } else {
-        addEdge(drawFromId, vertexId);
-      }
-      return;
-    }
-    if (activeTool === "move" || activeTool === "select") {
-      onSelectVertex(vertexId);
-      onSelectEdge(null);
-      if (activeTool === "move") setDragVertexId(vertexId);
-    }
+    setDragVertexId(vertexId);
+    onSelectVertex(vertexId);
+    onSelectEdge(null);
   }
 
   function handleEdgeClick(e: React.MouseEvent, edgeId: string) {
     e.stopPropagation();
-    if (activeTool === "delete") {
-      deleteEdge(edgeId);
-      return;
-    }
-    if (activeTool === "select") {
-      onSelectEdge(edgeId);
-      onSelectVertex(null);
-    }
+    onSelectEdge(edgeId);
+    onSelectVertex(null);
+    setEditingLabelId(null);
   }
 
   function handleMouseMove(e: React.MouseEvent) {
-    if (isPanning && activeTool === "pan") {
-      setPan({
-        x: panStart.current.panX + (e.clientX - panStart.current.x),
-        y: panStart.current.panY + (e.clientY - panStart.current.y),
-      });
-      return;
-    }
-    if (dragVertexId) {
-      const pt = svgPoint(e.clientX, e.clientY);
-      onStateChange({
-        ...state,
-        vertices: state.vertices.map((v) =>
-          v.id === dragVertexId ? { ...v, x: pt.x, y: pt.y } : v,
-        ),
-      });
-    }
+    if (!dragVertexId) return;
+    const pt = svgPoint(e.clientX, e.clientY);
+    onStateChange({
+      ...state,
+      vertices: state.vertices.map((v) =>
+        v.id === dragVertexId ? { ...v, x: pt.x, y: pt.y } : v,
+      ),
+    });
   }
 
   function handleMouseUp() {
-    if (dragVertexId) {
-      pushHistory(state);
-    }
     setDragVertexId(null);
-    setIsPanning(false);
   }
 
-  function handlePanStart(e: React.MouseEvent) {
-    if (activeTool !== "pan") return;
-    setIsPanning(true);
-    panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+  function startLabelEdit(label: FmbCanvasLabel, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingLabelId(label.id);
+    setEditDraft(label.text);
+    onSelectVertex(null);
+    onSelectEdge(null);
   }
 
-  const polygonPoints = state.vertices.map((v) => `${v.x + pan.x},${v.y + pan.y}`).join(" ");
+  function commitLabelEdit() {
+    if (!editingLabelId) return;
+    const label = state.canvasLabels.find((l) => l.id === editingLabelId);
+    if (!label) {
+      setEditingLabelId(null);
+      return;
+    }
+    const trimmed = editDraft.trim();
+    let edges = state.edges;
+    if (label.linkedEdgeId && trimmed) {
+      const parsed = parseFloat(trimmed);
+      if (!Number.isNaN(parsed)) {
+        edges = state.edges.map((edge) =>
+          edge.id === label.linkedEdgeId ? { ...edge, lengthM: parsed } : edge,
+        ) as FmbEdge[];
+      }
+    }
+    onStateChange({
+      ...state,
+      edges,
+      canvasLabels: state.canvasLabels.map((l) =>
+        l.id === editingLabelId ? { ...l, text: trimmed || l.text } : l,
+      ),
+    });
+    setEditingLabelId(null);
+  }
+
+  function handleCanvasClick() {
+    if (editingLabelId) {
+      commitLabelEdit();
+      return;
+    }
+    onSelectVertex(null);
+    onSelectEdge(null);
+  }
+
+  const { width, height } = FMB_CANVAS_VIEWBOX;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-slate-100 bg-white/90 px-3 py-2">
-        {TOOLS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            title={label}
-            onClick={() => {
-              onToolChange(id);
-              setDrawFromId(null);
-            }}
-            className={clsx(
-              "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition",
-              activeTool === id
-                ? "border-sky-300 bg-sky-50 text-sky-800"
-                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50",
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{label}</span>
-          </button>
-        ))}
-        <button
-          type="button"
-          title="Undo"
-          disabled={!history.length}
-          onClick={undo}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Undo2 className="h-3.5 w-3.5" />
-          Undo
-        </button>
-      </div>
-
-      <div className="relative min-h-0 flex-1 overflow-hidden bg-[#f4f1ea]">
-        {/* Mock FMB sketch background */}
-        <div
-          className="pointer-events-none absolute inset-4 rounded-lg border border-amber-200/60 bg-[#faf8f3] opacity-90"
-          style={{
-            backgroundImage: `
-              linear-gradient(rgba(180,160,120,0.08) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(180,160,120,0.08) 1px, transparent 1px)
-            `,
-            backgroundSize: "20px 20px",
-          }}
+    <div className="relative h-full min-h-[min(50.4vh,468px)] w-full flex-1 overflow-hidden bg-[#e8e4dc]">
+      <svg
+        ref={svgRef}
+        className={clsx("h-full w-full", dragVertexId ? "cursor-grabbing" : "cursor-default")}
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="xMidYMid meet"
+        onClick={handleCanvasClick}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        <image
+          href={FMB_BACKGROUND_URL}
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          preserveAspectRatio="xMidYMid meet"
         />
 
-        <svg
-          ref={svgRef}
-          className={clsx(
-            "relative h-full w-full",
-            activeTool === "pan" ? "cursor-grab" : activeTool === "addPoint" ? "cursor-crosshair" : "cursor-default",
-            isPanning && "cursor-grabbing",
-          )}
-          viewBox="0 0 500 380"
-          onClick={handleCanvasClick}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onMouseDown={handlePanStart}
-        >
-          <defs>
-            <pattern id="fmb-hatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
-              <line x1="0" y1="0" x2="0" y2="8" stroke="#c4b59a" strokeWidth="1" />
-            </pattern>
-          </defs>
-
-          {/* FMB register annotations (static mock) */}
-          <text x="16" y="24" className="fill-amber-900/50 text-[10px] font-serif" style={{ fontSize: 10 }}>
-            FMB Sheet No. 142 — Thirunallar
-          </text>
-          <text x="16" y="38" className="fill-amber-900/40 text-[9px] font-serif" style={{ fontSize: 9 }}>
-            Scale 1:1000 | Survey of India
-          </text>
-
-          <g opacity={extractionVisible ? 1 : 0.15} style={{ transition: "opacity 0.6s ease" }}>
-            {state.edges.map((edge) => {
-              const from = vertexMap[edge.from];
-              const to = vertexMap[edge.to];
-              if (!from || !to) return null;
-              const avgConf = (edge.lengthConfidence + edge.bearingConfidence) / 2;
-              const isSelected = selectedEdgeId === edge.id;
-              const mid = edgeMidpoint(from, to);
-              return (
-                <g key={edge.id}>
-                  <line
-                    x1={from.x + pan.x}
-                    y1={from.y + pan.y}
-                    x2={to.x + pan.x}
-                    y2={to.y + pan.y}
-                    stroke={confidenceStrokeColor(avgConf)}
-                    strokeWidth={isSelected ? 3 : 2}
-                    strokeDasharray={avgConf < 65 ? "6 4" : undefined}
-                    className="cursor-pointer"
-                    onClick={(e) => handleEdgeClick(e, edge.id)}
-                  />
+        <g opacity={extractionVisible ? 1 : 0.12} style={{ transition: "opacity 0.6s ease" }}>
+          {state.edges.map((edge) => {
+            const from = vertexMap[edge.from];
+            const to = vertexMap[edge.to];
+            if (!from || !to) return null;
+            const isHighlighted = edge.id === FMB_HIGHLIGHTED_EDGE_ID;
+            const isSelected = selectedEdgeId === edge.id;
+            const mid = edgeMidpoint(from, to);
+            const hasCanvasLabel = state.canvasLabels.some((l) => l.linkedEdgeId === edge.id);
+            const stroke = isHighlighted ? FMB_GREEN : FMB_ORANGE;
+            return (
+              <g key={edge.id}>
+                <line
+                  x1={from.x}
+                  y1={from.y}
+                  x2={to.x}
+                  y2={to.y}
+                  stroke={stroke}
+                  strokeWidth={isHighlighted ? 2.8 : isSelected ? 2.4 : 2}
+                  strokeOpacity={0.92}
+                  className="cursor-pointer"
+                  onClick={(e) => handleEdgeClick(e, edge.id)}
+                />
+                {!hasCanvasLabel ? (
                   <text
-                    x={mid.x + pan.x}
-                    y={mid.y + pan.y - 6}
+                    x={mid.x}
+                    y={mid.y - 4}
                     textAnchor="middle"
-                    className="pointer-events-none select-none fill-slate-700"
-                    style={{ fontSize: 8 }}
-                  >
-                    {edge.lengthM}m
-                  </text>
-                  <text
-                    x={mid.x + pan.x}
-                    y={mid.y + pan.y + 8}
-                    textAnchor="middle"
-                    className="pointer-events-none select-none fill-slate-500"
-                    style={{ fontSize: 7 }}
-                  >
-                    {edge.bearing}
-                  </text>
-                </g>
-              );
-            })}
-
-            {state.vertices.length >= 3 ? (
-              <polygon
-                points={polygonPoints}
-                fill="url(#fmb-hatch)"
-                fillOpacity={0.35}
-                stroke="#64748b"
-                strokeWidth={1}
-                strokeDasharray="4 2"
-                className="pointer-events-none"
-              />
-            ) : null}
-
-            {state.vertices.map((vertex) => {
-              const isSelected = selectedVertexId === vertex.id;
-              const isDrawSource = drawFromId === vertex.id;
-              return (
-                <g key={vertex.id}>
-                  <circle
-                    cx={vertex.x + pan.x}
-                    cy={vertex.y + pan.y}
-                    r={isSelected || isDrawSource ? 8 : 6}
-                    fill={confidenceStrokeColor(vertex.confidence)}
-                    stroke={isSelected ? "#0ea5e9" : "#fff"}
-                    strokeWidth={2}
-                    className="cursor-pointer"
-                    onMouseDown={(e) => handleVertexMouseDown(e, vertex.id)}
-                  />
-                  <text
-                    x={vertex.x + pan.x}
-                    y={vertex.y + pan.y - 12}
-                    textAnchor="middle"
-                    className="pointer-events-none select-none fill-slate-700 font-semibold"
+                    fill={FMB_ORANGE}
+                    fontWeight={600}
                     style={{ fontSize: 9 }}
+                    className="pointer-events-none select-none"
+                  >
+                    {edge.lengthM}
+                  </text>
+                ) : null}
+              </g>
+            );
+          })}
+
+          {state.vertices.map((vertex) => {
+            const isSelected = selectedVertexId === vertex.id;
+            const isAnchor = vertex.isAnchor;
+            const dotRadius = isAnchor ? (isSelected ? 10 : 8) : isSelected ? 6 : 4;
+            const dotFill = isAnchor ? FMB_GREEN : FMB_ORANGE;
+            return (
+              <g key={vertex.id}>
+                <circle
+                  cx={vertex.x}
+                  cy={vertex.y}
+                  r={dotRadius}
+                  fill={dotFill}
+                  fillOpacity={0.95}
+                  stroke={isSelected ? FMB_BLUE : "#fff"}
+                  strokeWidth={isAnchor ? 2 : 1.5}
+                  className="cursor-grab"
+                  onMouseDown={(e) => handleVertexMouseDown(e, vertex.id)}
+                />
+                {vertex.label ? (
+                  <text
+                    x={vertex.x}
+                    y={vertex.y - (isAnchor ? 16 : 12)}
+                    textAnchor="middle"
+                    fill={FMB_BLUE}
+                    fontWeight={700}
+                    style={{ fontSize: isAnchor ? 12 : 10 }}
+                    className="pointer-events-none select-none"
                   >
                     {vertex.label}
                   </text>
-                </g>
-              );
-            })}
-          </g>
+                ) : null}
+              </g>
+            );
+          })}
 
-          {activeTool === "drawLine" && drawFromId ? (
-            <text x="250" y="370" textAnchor="middle" className="fill-sky-600" style={{ fontSize: 10 }}>
-              Click target vertex to complete boundary segment
-            </text>
-          ) : null}
-        </svg>
-      </div>
+          {state.canvasLabels.map((label) => {
+            const isEditing = editingLabelId === label.id;
+            const fontSize = labelFontSize(label.kind);
+            const fill = labelFill(label.kind);
+            const approxWidth = Math.max(label.text.length * fontSize * 0.55, 28);
+            return (
+              <g key={label.id}>
+                {isEditing ? (
+                  <foreignObject
+                    x={label.x - approxWidth / 2}
+                    y={label.y - fontSize - 2}
+                    width={approxWidth + 16}
+                    height={fontSize + 12}
+                  >
+                    <input
+                      type="text"
+                      value={editDraft}
+                      autoFocus
+                      onChange={(e) => setEditDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitLabelEdit();
+                        if (e.key === "Escape") setEditingLabelId(null);
+                        e.stopPropagation();
+                      }}
+                      onBlur={commitLabelEdit}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full rounded border-2 border-sky-400 bg-white px-1 py-0.5 text-center font-semibold text-sky-900 shadow-md outline-none"
+                      style={{ fontSize }}
+                    />
+                  </foreignObject>
+                ) : (
+                  <text
+                    x={label.x}
+                    y={label.y}
+                    textAnchor="middle"
+                    fill={fill}
+                    fontWeight={labelFontWeight(label.kind)}
+                    style={{ fontSize }}
+                    className="cursor-text select-none"
+                    onClick={(e) => startLabelEdit(label, e)}
+                  >
+                    {label.text}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+
+      {extractionVisible ? (
+        <div className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-white/85 px-2 py-1 text-[10px] text-slate-600 shadow-sm backdrop-blur-sm">
+          Drag vertices · Click labels to edit
+        </div>
+      ) : null}
     </div>
   );
 }

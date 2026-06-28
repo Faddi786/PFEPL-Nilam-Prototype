@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, Grid3x3, Loader2, Play } from "lucide-react";
 import { Link } from "react-router-dom";
+import WorkflowSwitcher from "../components/WorkflowSwitcher";
 import WarpCanvas from "../components/warp/WarpCanvas";
 import WarpProcessingPanel from "../components/warp/WarpProcessingPanel";
+import { getVisiblePanelWorkflows } from "../data/workflows";
 import {
   computeRmsError,
   GDAL_PANEL_DEFAULTS,
@@ -15,6 +17,7 @@ import {
 } from "../data/warpMock";
 
 export default function WarpPage() {
+  const visibleWorkflows = useMemo(() => getVisiblePanelWorkflows(), []);
   const [step, setStep] = useState(0);
   const [gcps, setGcps] = useState<GcpAnchor[]>(() => INITIAL_GCPS.map((g) => ({ ...g })));
   const [mode, setMode] = useState<TransformMode>("warp");
@@ -58,15 +61,21 @@ export default function WarpPage() {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={runWarp}
-            disabled={processing || step < 1}
-            className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-            Run gdalwarp
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={runWarp}
+              disabled={processing || step < 1}
+              className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              Run gdalwarp
+            </button>
+            <WorkflowSwitcher
+              currentWorkflowId="georeferencing"
+              workflows={visibleWorkflows}
+            />
+          </div>
         </div>
 
         <div className="mx-auto mt-4 flex max-w-[1800px] items-center gap-2">

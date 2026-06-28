@@ -1,59 +1,38 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, Search, Wrench } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
-import clsx from "clsx";
-import BufferTool from "../components/moretools/BufferTool";
-import AreaDiffTool from "../components/moretools/AreaDiffTool";
-import EncroachmentTool from "../components/moretools/EncroachmentTool";
-import OverlapTool from "../components/moretools/OverlapTool";
-import IntersectTool from "../components/moretools/IntersectTool";
-import StatisticsTool from "../components/moretools/StatisticsTool";
 import SpatialToolDemo from "../components/moretools/SpatialToolDemo";
-import {
-  SPATIAL_CONTEXT,
-  MORE_TOOLS_TABS,
-  type MoreToolsTabId,
-} from "../data/moreToolsMock";
-import {
-  GENERIC_TOOL_IDS,
-  TOOL_CATEGORIES,
-  type ToolCategory,
-} from "../data/spatialToolCatalog";
-
-const LEGACY_COMPONENTS: Partial<Record<MoreToolsTabId, () => ReactNode>> = {
-  buffer: () => <BufferTool />,
-  "area-diff": () => <AreaDiffTool />,
-  encroachment: () => <EncroachmentTool />,
-  overlap: () => <OverlapTool />,
-  intersect: () => <IntersectTool />,
-  statistics: () => <StatisticsTool />,
-};
-
-function renderTool(id: MoreToolsTabId): ReactNode {
-  if (LEGACY_COMPONENTS[id]) return LEGACY_COMPONENTS[id]!();
-  if (GENERIC_TOOL_IDS.has(id)) return <SpatialToolDemo toolId={id} />;
-  return null;
-}
+import { RunAnalysisButton } from "../components/moretools/MoreToolsShared";
+import { SPATIAL_TOOL_CATALOG, type MoreToolsTabId } from "../data/spatialToolCatalog";
+import { getBaseParcelOverlays, runSpatialToolDemo } from "../data/spatialToolDemos";
+import type { MapOverlay } from "../components/moretools/MoreToolsMap";
 
 export default function MoreToolsPage() {
-  const [activeTab, setActiveTab] = useState<MoreToolsTabId>("buffer");
-  const [category, setCategory] = useState<ToolCategory | "all">("all");
-  const [search, setSearch] = useState("");
+  const [selectedToolId, setSelectedToolId] = useState<MoreToolsTabId>("buffer");
+  const [running, setRunning] = useState(false);
+  const [overlays, setOverlays] = useState<MapOverlay[]>(() => getBaseParcelOverlays());
+  const [mapSummary, setMapSummary] = useState<string | null>(null);
 
-  const filteredTabs = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return MORE_TOOLS_TABS.filter((tab) => {
-      if (category !== "all" && tab.category !== category) return false;
-      if (!q) return true;
-      return (
-        tab.label.toLowerCase().includes(q) ||
-        tab.title.toLowerCase().includes(q) ||
-        tab.description.toLowerCase().includes(q)
-      );
-    });
-  }, [category, search]);
+  const selectedTool = useMemo(
+    () => SPATIAL_TOOL_CATALOG.find((t) => t.id === selectedToolId) ?? SPATIAL_TOOL_CATALOG[0],
+    [selectedToolId],
+  );
 
-  const activeMeta = MORE_TOOLS_TABS.find((t) => t.id === activeTab);
+  function handleToolChange(toolId: MoreToolsTabId) {
+    setSelectedToolId(toolId);
+    setOverlays(getBaseParcelOverlays());
+    setMapSummary(null);
+  }
+
+  function runAnalysis() {
+    setRunning(true);
+    window.setTimeout(() => {
+      const result = runSpatialToolDemo(selectedToolId);
+      setOverlays(result.overlays);
+      setMapSummary(result.summary);
+      setRunning(false);
+    }, 550);
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#F7F7F5] p-3 text-[#1A1A1A] lg:p-4">
@@ -66,85 +45,46 @@ export default function MoreToolsPage() {
       </Link>
 
       <main className="mx-auto flex min-h-0 w-full max-w-[1200px] flex-1 flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/85 shadow-[0_8px_30px_rgba(0,0,0,0.06)]">
-        <header className="shrink-0 border-b border-slate-100 px-4 py-4 lg:px-6">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-              <Wrench className="h-5 w-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-xl font-semibold">More Tools</h1>
-              <p className="mt-0.5 text-sm text-slate-600">
-                Spatial tools catalog — {SPATIAL_CONTEXT.village}, {SPATIAL_CONTEXT.district},{" "}
-                {SPATIAL_CONTEXT.ut} · {MORE_TOOLS_TABS.length} tools
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search spatial tools…"
-                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none ring-slate-300 focus:ring-2"
-              />
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {TOOL_CATEGORIES.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setCategory(cat.id)}
-                  className={clsx(
-                    "rounded-lg px-2.5 py-1.5 text-xs font-medium transition",
-                    category === cat.id
-                      ? "bg-slate-800 text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200",
-                  )}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <nav
-            className="mt-3 flex gap-1 overflow-x-auto pb-1"
-            aria-label="Spatial analysis tools"
-          >
-            {filteredTabs.length === 0 ? (
-              <p className="px-2 py-2 text-sm text-slate-500">No tools match your search.</p>
-            ) : (
-              filteredTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={clsx(
-                    "shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition",
-                    activeTab === tab.id
-                      ? "bg-[#1A1A1A] text-white"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-                  )}
-                >
-                  {tab.label}
-                </button>
-              ))
-            )}
-          </nav>
-
-          {activeMeta ? (
-            <p className="mt-2 text-xs text-slate-400">
-              {activeMeta.category.charAt(0).toUpperCase() + activeMeta.category.slice(1)} ·{" "}
-              {filteredTabs.length} of {MORE_TOOLS_TABS.length} tools shown
+        <div className="flex shrink-0 flex-col gap-4 border-b border-slate-100 px-4 py-4 lg:flex-row lg:items-start lg:justify-between lg:px-6">
+          <div className="min-w-0 flex-1 lg:max-w-[55%]">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              GeoNilam use cases
             </p>
-          ) : null}
-        </header>
+            <ul className="mt-2 space-y-1.5 text-sm text-slate-600">
+              {selectedTool.useCases.map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-slate-400" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6 lg:py-5">
-          {renderTool(activeTab)}
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-end">
+            <label className="flex min-w-[220px] flex-col gap-1 text-sm">
+              <span className="font-medium text-slate-700">Spatial tool</span>
+              <select
+                value={selectedToolId}
+                onChange={(e) => handleToolChange(e.target.value as MoreToolsTabId)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none ring-slate-300 focus:ring-2"
+              >
+                {SPATIAL_TOOL_CATALOG.map((tool) => (
+                  <option key={tool.id} value={tool.id}>
+                    {tool.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <RunAnalysisButton
+              onClick={runAnalysis}
+              running={running}
+              label={selectedTool.runLabel ?? "Run analysis"}
+            />
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 p-4 lg:p-5">
+          <SpatialToolDemo overlays={overlays} summary={mapSummary} />
         </div>
       </main>
     </div>

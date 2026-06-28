@@ -10,7 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { EmptyResults, ResultsHeader, RunAnalysisButton, ToolShell } from "./MoreToolsShared";
-import { SPATIAL_CONTEXT, STATISTICS_BY_SCOPE, type StatisticsScope } from "../../data/moreToolsMock";
+import { SPATIAL_CONTEXT, getStatisticsByScope, type StatisticsScope } from "../../data/cadastralSpatialData";
 
 const SCOPE_OPTIONS: { value: StatisticsScope; label: string }[] = [
   { value: "village", label: "Village" },
@@ -25,7 +25,7 @@ export default function StatisticsTool() {
   const [running, setRunning] = useState(false);
 
   const stats = useMemo(
-    () => STATISTICS_BY_SCOPE.find((s) => s.scope === scope) ?? STATISTICS_BY_SCOPE[0],
+    () => getStatisticsByScope().find((s) => s.scope === scope) ?? getStatisticsByScope()[0],
     [scope],
   );
 

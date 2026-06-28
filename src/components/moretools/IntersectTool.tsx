@@ -1,17 +1,18 @@
 import { useMemo, useState } from "react";
 import MoreToolsMap, { type MapOverlay } from "./MoreToolsMap";
 import { EmptyResults, ResultsHeader, RunAnalysisButton, ToolShell } from "./MoreToolsShared";
-import { INTERSECT_LAYER_PAIRS } from "../../data/moreToolsMock";
+import { getIntersectLayerPairs } from "../../data/cadastralSpatialData";
 
 export default function IntersectTool() {
-  const [pairId, setPairId] = useState(INTERSECT_LAYER_PAIRS[0].id);
+  const intersectPairs = getIntersectLayerPairs();
+  const [pairId, setPairId] = useState(intersectPairs[0]?.id ?? "");
   const [analyzed, setAnalyzed] = useState(false);
   const [running, setRunning] = useState(false);
 
-  const pair = INTERSECT_LAYER_PAIRS.find((p) => p.id === pairId) ?? INTERSECT_LAYER_PAIRS[0];
+  const pair = intersectPairs.find((p) => p.id === pairId) ?? intersectPairs[0];
 
   const overlays = useMemo((): MapOverlay[] => {
-    if (!analyzed) return [];
+    if (!analyzed || !pair) return [];
 
     return [
       {
@@ -75,7 +76,7 @@ export default function IntersectTool() {
               }}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
             >
-              {INTERSECT_LAYER_PAIRS.map((p) => (
+              {intersectPairs.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.label}
                 </option>

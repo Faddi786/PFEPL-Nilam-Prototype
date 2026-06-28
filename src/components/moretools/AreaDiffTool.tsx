@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import MoreToolsMap, { type MapOverlay } from "./MoreToolsMap";
 import { EmptyResults, ResultsHeader, RunAnalysisButton, ToolShell } from "./MoreToolsShared";
-import { AREA_DIFF_CASES, DEMO_PARCELS } from "../../data/moreToolsMock";
+import { getAreaDiffCases, getCadastralParcels, getParcelById } from "../../data/cadastralSpatialData";
 
 const STATUS_TONE = {
   minor: "success" as const,
@@ -14,17 +14,18 @@ export default function AreaDiffTool() {
   const [running, setRunning] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const selected = AREA_DIFF_CASES.find((c) => c.id === selectedId) ?? AREA_DIFF_CASES[0];
+  const areaDiffCases = getAreaDiffCases();
+  const selected = areaDiffCases.find((c) => c.id === selectedId) ?? areaDiffCases[0];
 
   const overlays = useMemo((): MapOverlay[] => {
-    const base: MapOverlay[] = DEMO_PARCELS.slice(0, 8).map((p, i) => ({
+    const base: MapOverlay[] = getCadastralParcels().slice(0, 8).map((p, i) => ({
       id: `parcel-${p.id}`,
       type: "polygon",
       coordinates: p.ring,
       fill:
-        analyzed && AREA_DIFF_CASES[i % AREA_DIFF_CASES.length]?.status === "critical"
+        analyzed && areaDiffCases[i % areaDiffCases.length]?.status === "critical"
           ? "rgba(239,68,68,0.35)"
-          : analyzed && AREA_DIFF_CASES[i % AREA_DIFF_CASES.length]?.status === "moderate"
+          : analyzed && areaDiffCases[i % areaDiffCases.length]?.status === "moderate"
             ? "rgba(245,158,11,0.35)"
             : "rgba(148,163,184,0.2)",
       stroke: "#64748b",
@@ -33,8 +34,7 @@ export default function AreaDiffTool() {
     }));
 
     if (analyzed && selected) {
-      const idx = AREA_DIFF_CASES.indexOf(selected);
-      const parcel = DEMO_PARCELS[idx % DEMO_PARCELS.length];
+      const parcel = getParcelById(selected.parcelId);
       if (parcel) {
         base.push({
           id: "highlight",
@@ -48,18 +48,18 @@ export default function AreaDiffTool() {
       }
     }
     return base;
-  }, [analyzed, selected]);
+  }, [analyzed, selected, areaDiffCases]);
 
   function runAnalysis() {
     setRunning(true);
     window.setTimeout(() => {
       setAnalyzed(true);
-      setSelectedId(AREA_DIFF_CASES[0].id);
+      setSelectedId(areaDiffCases[0]?.id ?? null);
       setRunning(false);
     }, 700);
   }
 
-  const totalDiff = AREA_DIFF_CASES.reduce((s, c) => s + c.diffSqM, 0);
+  const totalDiff = areaDiffCases.reduce((s, c) => s + c.diffSqM, 0);
 
   return (
     <ToolShell
@@ -76,15 +76,17 @@ export default function AreaDiffTool() {
         analyzed ? (
           <>
             <ResultsHeader
-              title={`${AREA_DIFF_CASES.length} parcels with area mismatch`}
+              title={`${areaDiffCases.length} parcels with area mismatch`}
               badge={`Total Δ ${totalDiff} sq.m`}
               badgeTone="warning"
             />
-            <p className="mb-3 text-sm text-slate-600">
-              Example: Survey <strong>{selected.surveyNo}</strong> — FMB {selected.fmbAreaSqM} sq.m vs DGPS{" "}
-              {selected.dgpsAreaSqM} sq.m → difference <strong>{selected.diffSqM} sq.m</strong> (
-              {selected.variancePct}%)
-            </p>
+            {selected ? (
+              <p className="mb-3 text-sm text-slate-600">
+                Example: Survey <strong>{selected.surveyNo}</strong> — FMB {selected.fmbAreaSqM} sq.m vs DGPS{" "}
+                {selected.dgpsAreaSqM} sq.m → difference <strong>{selected.diffSqM} sq.m</strong> (
+                {selected.variancePct}%)
+              </p>
+            ) : null}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px] text-left text-sm">
                 <thead>
@@ -98,7 +100,7 @@ export default function AreaDiffTool() {
                   </tr>
                 </thead>
                 <tbody>
-                  {AREA_DIFF_CASES.map((row) => (
+                  {areaDiffCases.map((row) => (
                     <tr
                       key={row.id}
                       onClick={() => setSelectedId(row.id)}

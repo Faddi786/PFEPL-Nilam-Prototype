@@ -1,3 +1,4 @@
+import { type ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import WorkflowSwitcher from "./WorkflowSwitcher";
@@ -9,6 +10,7 @@ type Props = {
   backTo?: string;
   currentWorkflowId: WorkflowId;
   workflows: WorkflowConfig[];
+  headerActions?: ReactNode;
 };
 
 export default function WorkflowPageHeader({
@@ -17,6 +19,7 @@ export default function WorkflowPageHeader({
   backTo = "/app",
   currentWorkflowId,
   workflows,
+  headerActions,
 }: Props) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -36,7 +39,10 @@ export default function WorkflowPageHeader({
         ) : null}
       </div>
 
-      <WorkflowSwitcher currentWorkflowId={currentWorkflowId} workflows={workflows} />
+      <div className="flex flex-wrap items-center gap-2">
+        {headerActions}
+        <WorkflowSwitcher currentWorkflowId={currentWorkflowId} workflows={workflows} />
+      </div>
     </div>
   );
 }

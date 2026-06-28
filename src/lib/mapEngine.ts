@@ -85,6 +85,28 @@ type SetDatasetOptions = {
   transitionDuration?: number;
 };
 
+export type MapEngineOptions = {
+  /** Carto basemap + parcel outlines/labels only — skip thematic overlays and their data. */
+  cadastralOnly?: boolean;
+};
+
+/** Layers omitted from data load and kept hidden in cadastral-only mode. */
+const CADASTRAL_ONLY_SKIP_LAYERS = new Set<LayerId>([
+  "ortho",
+  "fmb",
+  "fmbChains",
+  "variance",
+  "dgps",
+  "collabland",
+  "crops",
+  "buildings",
+  "trees",
+  "roads",
+  "waterBodies",
+  "forest",
+  "cadastralDimensions",
+]);
+
 type EngineInstance = {
   map: Map;
   setDataset: (dataset: RegionDataset, options?: SetDatasetOptions) => void;
@@ -94,6 +116,7 @@ type EngineInstance = {
   resetTools: (silent?: boolean) => void;
   runAmalgamation: () => { ok: boolean; reason?: string };
   commitParcelGeometry: (parcelId: string) => boolean;
+  submitMutationForApproval: (parcelId: string) => boolean;
   highlightParcels: (ids: string[], options?: { colorByVariance?: boolean }) => void;
   clearHighlights: () => void;
   clearInteractions: () => void;
@@ -288,7 +311,13 @@ function splitPolygonByLine(
   return [leftPoly, rightPoly];
 }
 
-export function createMapEngine(target: HTMLElement, dataset: RegionDataset, callbacks: Callbacks = {}): EngineInstance {
+export function createMapEngine(
+  target: HTMLElement,
+  dataset: RegionDataset,
+  callbacks: Callbacks = {},
+  options: MapEngineOptions = {},
+): EngineInstance {
+  const cadastralOnly = options.cadastralOnly ?? false;
   const format = new GeoJSON();
 
   function decoupleOlGeometry(feature: Feature<Geometry>) {
@@ -447,7 +476,7 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
   };
 
   let parcelsLayerVisible = true;
-  let cropsLayerVisible = true;
+  let cropsLayerVisible = !cadastralOnly;
   let varianceLayerVisible = false;
   /** User toggle: show green/amber/red fills on parcels (stroke always on). */
   let varianceFillVisible = false;
@@ -462,6 +491,7 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
   } as const;
 
   const parcelBoundaryStroke = "#111827";
+  const parcelHighlightStroke = "#2563eb";
 
   type VarianceBand = keyof typeof variancePalette;
 
@@ -848,20 +878,27 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
       style: (feature, resolution) => {
         const selected = Boolean(feature.get("selected"));
         const varianceHighlight = Boolean(feature.get("varianceHighlight"));
+        const hovered = Boolean(feature.get("hovered"));
+        const highlighted = selected || varianceHighlight || hovered;
         const band = parcelVarianceBand(feature as Feature<Geometry>);
         let strokeWidth = parcelEditDisplayMode ? 1 : 0.65;
         const label = parcelLabelStyle(feature as Feature<Geometry>, resolution);
         const labelGeometry = label ? parcelLabelGeometry(feature as Feature<Geometry>) : undefined;
 
-        if (selected) {
+        if (selected || varianceHighlight) {
           strokeWidth = 1.4;
+        } else if (hovered) {
+          strokeWidth = 1.15;
         }
 
         const showFill = varianceFillVisible || varianceHighlight;
 
         const styles = [
           new Style({
-            stroke: new Stroke({ color: parcelBoundaryStroke, width: strokeWidth }),
+            stroke: new Stroke({
+              color: highlighted ? parcelHighlightStroke : parcelBoundaryStroke,
+              width: strokeWidth,
+            }),
             ...(showFill
               ? { fill: new Fill({ color: variancePalette[band] }) }
               : { fill: new Fill({ color: "rgba(0,0,0,0)" }) }),
@@ -902,37 +939,37 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
     roads: new VectorLayer({
       source: genericSources.roads,
       zIndex: 6.5,
-      visible: true,
+      visible: !cadastralOnly,
       style: (feature) => roadStyle(feature as Feature<Geometry>),
     }),
     waterBodies: new VectorLayer({
       source: genericSources.waterBodies,
       style: styleByLayer.waterBodies,
       zIndex: 6.8,
-      visible: true,
+      visible: !cadastralOnly,
     }),
     forest: new VectorLayer({
       source: genericSources.forest,
       style: (feature, resolution) => forestStyle(feature as Feature<Geometry>, resolution),
       zIndex: 7,
-      visible: true,
+      visible: !cadastralOnly,
     }),
     crops: new VectorLayer({
       source: genericSources.crops,
       zIndex: 7.5,
-      visible: true,
+      visible: !cadastralOnly,
       style: (feature, resolution) => cropStyle(feature as Feature<Geometry>, resolution),
     }),
     buildings: new VectorLayer({
       source: genericSources.buildings,
       style: styleByLayer.buildings,
       zIndex: 8,
-      visible: true,
+      visible: !cadastralOnly,
     }),
     trees: new VectorLayer({
       source: genericSources.trees,
       zIndex: 8.5,
-      visible: true,
+      visible: !cadastralOnly,
       style: styleByLayer.trees,
     }),
     cadastralDimensions: new VectorLayer({
@@ -964,6 +1001,17 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
   layerMap.variance.setVisible(false);
   layerMap.parcels.setOpacity(1);
   updateParcelBoundariesVisibility();
+
+  if (cadastralOnly) {
+    CADASTRAL_ONLY_SKIP_LAYERS.forEach((layerId) => {
+      layerMap[layerId]?.setVisible(false);
+    });
+    layerMap.ortho.setVisible(false);
+    layerMap.dgps.setVisible(false);
+    layerMap.collabland.setVisible(false);
+    layerMap.fmb.setVisible(false);
+    layerMap.fmbChains.setVisible(false);
+  }
 
   const map = new Map({
     target,
@@ -1007,6 +1055,8 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
 
   const select = new Select({ layers: [layerMap.parcels], style: null, multi: true });
   map.addInteraction(select);
+
+  let hoveredParcelId: string | null = null;
 
   const activeInteractions: Array<Modify | Draw | Snap> = [];
 
@@ -1140,6 +1190,33 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
     return true;
   }
 
+  function submitMutationForApproval(parcelId: string) {
+    const feature = parcelSource
+      .getFeatures()
+      .find((parcel) => String(parcel.get("id")) === String(parcelId));
+    if (!feature || !dirtyParcelIds.has(String(parcelId))) return false;
+
+    const current = writeParcelGeoJson(feature);
+    const sanitized = sanitizeParcelGeoJson(current);
+    if (!sanitized) {
+      callbacks.onToast?.("Invalid geometry — mutation rejected");
+      return false;
+    }
+
+    applyParcelGeoJson(feature, sanitized);
+    decoupleOlGeometry(feature);
+    const surveyNo = String(feature.get("surveyNo") || parcelId);
+    feature.set("geometryDirty", false);
+    feature.set("status", "mutation_pending");
+    dirtyParcelIds.delete(String(parcelId));
+    syncParcelBoundariesFromParcels();
+    syncVarianceFromParcels();
+    exitParcelEditDisplayMode();
+    refreshStyledLayers();
+    callbacks.onToast?.(`Mutation sent for approval — ${surveyNo}`);
+    return true;
+  }
+
   function enterParcelEditDisplayMode() {
     if (!parcelSource.getFeatures().length) return;
     parcelEditDisplayMode = true;
@@ -1224,10 +1301,15 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
 
   function loadDataset(next: RegionDataset, options?: SetDatasetOptions) {
     dirtyParcelIds.clear();
+    hoveredParcelId = null;
     clearFmbChainSelection();
     (Object.keys(genericSources) as LayerId[]).forEach((layerId) => {
       if (ADMIN_BOUNDARY_LAYER_IDS.includes(layerId as AdminBoundaryLayerId)) return;
       if (LEGACY_MOCK_ADMIN_LAYER_IDS.includes(layerId as (typeof LEGACY_MOCK_ADMIN_LAYER_IDS)[number])) {
+        genericSources[layerId].clear();
+        return;
+      }
+      if (cadastralOnly && CADASTRAL_ONLY_SKIP_LAYERS.has(layerId)) {
         genericSources[layerId].clear();
         return;
       }
@@ -1258,23 +1340,52 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
 
   loadDataset(dataset);
 
-  void loadAdminBoundaryGeoJson().then((collections) => {
-    ADMIN_BOUNDARY_LAYER_IDS.forEach((layerId) => {
-      const collection = collections[layerId];
-      if (!collection?.features?.length) return;
-      const features = format.readFeatures(collection, {
-        dataProjection: "EPSG:4326",
-        featureProjection: "EPSG:3857",
+  if (!cadastralOnly) {
+    void loadAdminBoundaryGeoJson().then((collections) => {
+      ADMIN_BOUNDARY_LAYER_IDS.forEach((layerId) => {
+        const collection = collections[layerId];
+        if (!collection?.features?.length) return;
+        const features = format.readFeatures(collection, {
+          dataProjection: "EPSG:4326",
+          featureProjection: "EPSG:3857",
+        });
+        genericSources[layerId].addFeatures(features);
       });
-      genericSources[layerId].addFeatures(features);
     });
-  });
+  }
 
   select.on("select", () => {
     const selected = select.getFeatures().getArray();
     const selectedSet = new Set(selected.map((f) => f.get("id")));
     parcelSource.getFeatures().forEach((f) => f.set("selected", selectedSet.has(f.get("id"))));
     callbacks.onSelectionChange?.(selected[0] ? parcelToRecord(selected[0]) : null);
+  });
+
+  function setHoveredParcel(nextId: string | null) {
+    if (nextId === hoveredParcelId) return;
+    parcelSource.getFeatures().forEach((feature) => {
+      const id = String(feature.get("id"));
+      if (id === hoveredParcelId) feature.set("hovered", false);
+      if (nextId && id === nextId) feature.set("hovered", true);
+    });
+    hoveredParcelId = nextId;
+    refreshStyledLayers();
+  }
+
+  map.on("pointermove", (event) => {
+    if (event.dragging) return;
+    const parcel = map.forEachFeatureAtPixel(event.pixel, (feature, layer) => {
+      if (layer === layerMap.parcels) return feature;
+      return null;
+    });
+    const nextId = parcel ? String(parcel.get("id")) : null;
+    setHoveredParcel(nextId);
+    map.getTargetElement().style.cursor = parcel ? "pointer" : "";
+  });
+
+  map.getViewport().addEventListener("mouseleave", () => {
+    setHoveredParcel(null);
+    map.getTargetElement().style.cursor = "";
   });
 
   map.getViewport().addEventListener("contextmenu", (event) => {
@@ -1577,9 +1688,11 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
 
   function clearHighlights() {
     select.getFeatures().clear();
+    hoveredParcelId = null;
     parcelSource.getFeatures().forEach((feature) => {
       feature.set("selected", false);
       feature.set("varianceHighlight", false);
+      feature.set("hovered", false);
     });
     refreshStyledLayers();
   }
@@ -1638,6 +1751,7 @@ export function createMapEngine(target: HTMLElement, dataset: RegionDataset, cal
     },
     runAmalgamation,
     commitParcelGeometry,
+    submitMutationForApproval,
     resetTools,
     highlightParcels,
     clearHighlights,

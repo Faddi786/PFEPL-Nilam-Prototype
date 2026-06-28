@@ -7,7 +7,6 @@ import {
   Box,
   Cloud,
   Database,
-  Eye,
   Globe,
   HardDrive,
   Layers,
@@ -37,17 +36,41 @@ import {
   GdalTab,
   GeoServerTab,
   GisTab,
-  InfrastructureTab,
+  CloudUsageTab,
   KubernetesTab,
   KpisTab,
   NetworkTab,
   ObjectStorageTab,
   SecurityTab,
 } from "../components/monitor/MonitorTabPanels";
-import { StatusBadge } from "../components/monitor/MonitorShared";
+
+/** Toggle Monitor Eye left-sidebar nav items; tab panels remain in code. */
+const MONITOR_SIDEBAR_VISIBILITY: Record<MonitorTabId, boolean> = {
+  infrastructure: true, // Cloud Usage — platform cost & capacity
+  kubernetes: false,
+  docker: false,
+  database: true, // PostGIS — cadastral data backbone
+  geoserver: false,
+  application: true, // Spring Boot — core API health
+  frontend: false,
+  gis: true, // GeoServer/tiles — map delivery
+  gdal: false,
+  "background-jobs": false,
+  "object-storage": false,
+  security: false,
+  api: false,
+  network: false,
+  backup: false,
+  audit: false,
+  kpis: true, // mutations, ULPINs — executive metrics
+  alerts: true, // operational incidents
+};
+
+const VISIBLE_MONITOR_TABS = MONITOR_TABS.filter((tab) => MONITOR_SIDEBAR_VISIBILITY[tab.id]);
 
 const TAB_ICONS: Record<string, typeof Server> = {
   server: Server,
+  cloud: Cloud,
   k8s: Cloud,
   docker: Box,
   database: Database,
@@ -70,7 +93,7 @@ const TAB_ICONS: Record<string, typeof Server> = {
 function TabPanel({ tabId, alerts, onAcknowledge }: { tabId: MonitorTabId; alerts: MonitorAlert[]; onAcknowledge: (id: string) => void }) {
   switch (tabId) {
     case "infrastructure":
-      return <InfrastructureTab />;
+      return <CloudUsageTab />;
     case "kubernetes":
       return <KubernetesTab />;
     case "docker":
@@ -114,65 +137,24 @@ export default function MonitorPage() {
   const [activeTab, setActiveTab] = useState<MonitorTabId>("infrastructure");
   const [alerts, setAlerts] = useState<MonitorAlert[]>(MONITOR_ALERTS);
 
-  const clusterCpu = 42;
-
-  const openCritical = alerts.filter((a) => a.severity === "critical" && !a.acknowledged).length;
-
   const handleAcknowledge = (id: string) => {
     setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, acknowledged: true } : a)));
   };
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#0f1419]">
-      <header className="shrink-0 border-b border-slate-800 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 px-4 py-3 lg:px-5">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="min-w-0">
-            <Link
-              to="/app"
-              className="mb-1 inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400 transition hover:text-slate-200"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to map
-            </Link>
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 ring-1 ring-emerald-500/40">
-                <Eye className="h-5 w-5 text-emerald-400" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold tracking-tight text-white">Monitor — Eye</h1>
-                <p className="text-[11px] text-slate-400">DoSLR NOC · System Health Dashboard · Puducherry UT</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1.5">
-              <span className="inline-flex h-2 w-2 rounded-full bg-slate-400" />
-              <span className="text-[11px] font-medium text-slate-300">Snapshot</span>
-            </div>
-            <div className="hidden rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-[11px] text-slate-300 sm:block">
-              Cluster CPU <span className="font-semibold text-white">{clusterCpu}%</span>
-            </div>
-            {openCritical > 0 ? (
-              <button
-                type="button"
-                onClick={() => setActiveTab("alerts")}
-                className="flex items-center gap-1.5 rounded-lg border border-rose-500/50 bg-rose-500/20 px-3 py-1.5 text-[11px] font-semibold text-rose-300"
-              >
-                <AlertTriangle className="h-3.5 w-3.5" />
-                {openCritical} critical
-              </button>
-            ) : (
-              <StatusBadge status="healthy" label="All systems nominal" />
-            )}
-          </div>
-        </div>
-      </header>
+    <div className="relative flex h-screen flex-col overflow-hidden bg-[#0f1419]">
+      <Link
+        to="/app"
+        aria-label="Back to map"
+        className="absolute left-4 top-4 z-50 flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-800/95 text-slate-300 shadow-lg backdrop-blur-sm transition hover:border-slate-600 hover:bg-slate-700 hover:text-white"
+      >
+        <ArrowLeft className="h-4 w-4" />
+      </Link>
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <nav className="shrink-0 overflow-x-auto border-b border-slate-800 bg-slate-900/95 lg:w-52 lg:border-b-0 lg:border-r">
+        <nav className="shrink-0 overflow-x-auto border-b border-slate-800 bg-slate-900/95 pt-14 lg:w-52 lg:border-b-0 lg:border-r">
           <div className="flex gap-1 p-2 lg:flex-col lg:gap-0.5">
-            {MONITOR_TABS.map((tab) => {
+            {VISIBLE_MONITOR_TABS.map((tab) => {
               const Icon = TAB_ICONS[tab.icon] ?? Activity;
               const active = activeTab === tab.id;
               return (

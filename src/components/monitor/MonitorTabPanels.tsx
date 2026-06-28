@@ -19,6 +19,7 @@ import {
   GIS_METRICS,
   INFRA_METRICS,
   INFRA_SERVERS,
+  buildCloudUsageForecast,
   JOB_QUEUES,
   JOB_TABLE,
   K8S_DEPLOYMENTS,
@@ -32,6 +33,7 @@ import {
   type MonitorAlert,
 } from "../../data/monitorMock";
 import {
+  CloudUsageForecastChart,
   DataTable,
   DonutChart,
   MetricGaugeRing,
@@ -44,7 +46,9 @@ import {
   StatusBadge,
 } from "./MonitorShared";
 
-export function InfrastructureTab() {
+export function CloudUsageTab() {
+  const usageForecast = buildCloudUsageForecast();
+
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
@@ -95,9 +99,21 @@ export function InfrastructureTab() {
           rows={INFRA_SERVERS as unknown as Record<string, unknown>[]}
         />
       </MonitorCard>
+      <MonitorCard title="Usage trend & forecast" subtitle="Monthly cloud resource consumption — prepare for next billing cycle">
+        <CloudUsageForecastChart
+          data={usageForecast.chartData}
+          predictedLabel={usageForecast.nextMonthLabel}
+          predictedValue={usageForecast.predictedNextMonth}
+          trendPerMonth={usageForecast.trendPerMonth}
+          trendPct={usageForecast.trendPct}
+        />
+      </MonitorCard>
     </div>
   );
 }
+
+/** @deprecated Use CloudUsageTab — kept for import compatibility */
+export const InfrastructureTab = CloudUsageTab;
 
 export function KubernetesTab() {
   return (

@@ -1,18 +1,20 @@
 import { useMemo, useState } from "react";
 import MoreToolsMap, { type MapOverlay } from "./MoreToolsMap";
 import { EmptyResults, ResultsHeader, RunAnalysisButton, ToolShell } from "./MoreToolsShared";
-import { DEMO_PARCELS, OVERLAP_CASES } from "../../data/moreToolsMock";
+import { getCadastralParcels, getOverlapCases, getSpatialContext } from "../../data/cadastralSpatialData";
 
 export default function OverlapTool() {
   const [analyzed, setAnalyzed] = useState(false);
   const [running, setRunning] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const selected = OVERLAP_CASES.find((c) => c.id === selectedId) ?? OVERLAP_CASES[0];
+  const overlapCases = getOverlapCases();
+  const context = getSpatialContext();
+  const selected = overlapCases.find((c) => c.id === selectedId) ?? overlapCases[0];
 
   const overlays = useMemo((): MapOverlay[] => {
     if (!analyzed) {
-      return DEMO_PARCELS.slice(0, 6).map((p) => ({
+      return getCadastralParcels().slice(0, 6).map((p) => ({
         id: `parcel-${p.id}`,
         type: "polygon" as const,
         coordinates: p.ring,
@@ -23,12 +25,23 @@ export default function OverlapTool() {
       }));
     }
 
-    const c = selected ?? OVERLAP_CASES[0];
+    if (!selected) {
+      return getCadastralParcels().slice(0, 6).map((p) => ({
+        id: `parcel-${p.id}`,
+        type: "polygon" as const,
+        coordinates: p.ring,
+        fill: "rgba(148,163,184,0.2)",
+        stroke: "#64748b",
+        strokeWidth: 1,
+        zIndex: 1,
+      }));
+    }
+
     return [
       {
         id: "parcel-a",
         type: "polygon" as const,
-        coordinates: c.ringA,
+        coordinates: selected.ringA,
         fill: "rgba(59,130,246,0.3)",
         stroke: "#2563eb",
         strokeWidth: 2,
@@ -37,7 +50,7 @@ export default function OverlapTool() {
       {
         id: "parcel-b",
         type: "polygon" as const,
-        coordinates: c.ringB,
+        coordinates: selected.ringB,
         fill: "rgba(168,85,247,0.3)",
         stroke: "#9333ea",
         strokeWidth: 2,
@@ -46,7 +59,7 @@ export default function OverlapTool() {
       {
         id: "overlap",
         type: "polygon" as const,
-        coordinates: c.overlapRing,
+        coordinates: selected.overlapRing,
         fill: "rgba(239,68,68,0.6)",
         stroke: "#dc2626",
         strokeWidth: 2.5,
@@ -59,7 +72,7 @@ export default function OverlapTool() {
     setRunning(true);
     window.setTimeout(() => {
       setAnalyzed(true);
-      setSelectedId(OVERLAP_CASES[0].id);
+      setSelectedId(overlapCases[0]?.id ?? null);
       setRunning(false);
     }, 700);
   }
@@ -79,15 +92,21 @@ export default function OverlapTool() {
         analyzed ? (
           <>
             <ResultsHeader
-              title={`Overlap found — Area = ${selected.overlapAreaSqM} sq.m`}
-              badge={`${OVERLAP_CASES.length} pairs in Khutal`}
+              title={
+                selected
+                  ? `Overlap found — Area = ${selected.overlapAreaSqM} sq.m`
+                  : "No overlapping parcel pairs detected"
+              }
+              badge={`${overlapCases.length} pairs in ${context.village}`}
               badgeTone="danger"
             />
-            <p className="mb-3 text-sm text-slate-600">
-              Parcels <strong>{selected.parcelA}</strong> and <strong>{selected.parcelB}</strong> in{" "}
-              {selected.village} share overlapping geometry. Severity:{" "}
-              <strong className="capitalize">{selected.severity}</strong>.
-            </p>
+            {selected ? (
+              <p className="mb-3 text-sm text-slate-600">
+                Parcels <strong>{selected.parcelA}</strong> and <strong>{selected.parcelB}</strong> in{" "}
+                {selected.village} share overlapping geometry. Severity:{" "}
+                <strong className="capitalize">{selected.severity}</strong>.
+              </p>
+            ) : null}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[480px] text-left text-sm">
                 <thead>
@@ -100,7 +119,7 @@ export default function OverlapTool() {
                   </tr>
                 </thead>
                 <tbody>
-                  {OVERLAP_CASES.map((row) => (
+                  {overlapCases.map((row) => (
                     <tr
                       key={row.id}
                       onClick={() => setSelectedId(row.id)}

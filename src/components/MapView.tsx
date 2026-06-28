@@ -16,6 +16,9 @@ import {
   type RegionKey,
 } from "../data/mockData";
 
+/** Toggle map top-right tools menu; component and routes remain available. */
+const SHOW_MAP_TOOLS = false;
+
 type Props = {
   regionKey: RegionKey;
   layerGroups: LayerGroup[];
@@ -188,7 +191,9 @@ export default function MapView({
           <BasemapDropdown activeBasemapId={basemapId} onBasemapChange={onBasemapChange} />
         ) : null}
         <ThematicLayersDropdown layers={thematicLayers} onToggle={onToggleThematicLayer} />
-        <MapToolsDropdown activeTool={activeTool} onSelectTool={handleSelectTool} />
+        {SHOW_MAP_TOOLS ? (
+          <MapToolsDropdown activeTool={activeTool} onSelectTool={handleSelectTool} />
+        ) : null}
         {onTogglePanel ? (
           <button
             type="button"

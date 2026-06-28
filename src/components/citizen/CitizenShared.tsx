@@ -14,7 +14,7 @@ export function CitizenCard({
   className?: string;
 }) {
   return (
-    <div className={`rounded-2xl border border-slate-200 bg-white ${className}`}>
+    <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md ${className}`}>
       <div className="border-b border-slate-100 px-4 py-3">
         <p className="text-sm font-semibold text-[#1A1A1A]">{title}</p>
         {subtitle ? <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p> : null}

@@ -172,7 +172,7 @@ export function MiniLineChart({
 }: {
   data: Record<string, string | number>[];
   xKey: string;
-  lines: { key: string; color: string }[];
+  lines: { key: string; color: string; strokeDasharray?: string }[];
 }) {
   return (
     <ChartContainer height={176}>
@@ -182,10 +182,102 @@ export function MiniLineChart({
         <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
         <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
         {lines.map((l) => (
-          <Line key={l.key} type="monotone" dataKey={l.key} stroke={l.color} strokeWidth={2} dot={false} />
+          <Line
+            key={l.key}
+            type="monotone"
+            dataKey={l.key}
+            stroke={l.color}
+            strokeWidth={2}
+            strokeDasharray={l.strokeDasharray}
+            dot={false}
+            connectNulls
+          />
         ))}
       </LineChart>
     </ChartContainer>
+  );
+}
+
+export function CloudUsageForecastChart({
+  data,
+  predictedLabel,
+  predictedValue,
+  trendPerMonth,
+  trendPct,
+}: {
+  data: { month: string; historical: number | null; forecast: number | null }[];
+  predictedLabel: string;
+  predictedValue: number;
+  trendPerMonth: number;
+  trendPct: number;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap gap-4">
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Next month prediction</p>
+            <p className="mt-0.5 text-2xl font-bold text-[#1A1A1A]">
+              {predictedValue.toLocaleString()} <span className="text-sm font-medium text-slate-500">units</span>
+            </p>
+            <p className="text-[11px] text-slate-500">{predictedLabel} · linear trend extrapolation</p>
+          </div>
+          <div className="rounded-xl border border-sky-100 bg-sky-50/60 px-3 py-2">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-sky-700">Monthly trend</p>
+            <p className="mt-0.5 text-sm font-semibold text-sky-900">
+              +{trendPerMonth} units/mo <span className="font-normal text-sky-700">({trendPct}% over 12 mo)</span>
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 text-[11px] text-slate-600">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-0.5 w-5 rounded bg-sky-600" />
+            Historical
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-0.5 w-5 rounded border-t-2 border-dashed border-violet-500" />
+            Forecast
+          </span>
+        </div>
+      </div>
+      <ChartContainer height={220}>
+        <LineChart data={data} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+          <XAxis dataKey="month" tick={{ fontSize: 10 }} stroke="#94a3b8" interval="preserveStartEnd" />
+          <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" unit=" u" />
+          <Tooltip
+            contentStyle={{ fontSize: 11, borderRadius: 8 }}
+            formatter={(value, name) => {
+              const label = name === "historical" ? "Actual usage" : "Forecast";
+              if (value == null) return ["—", label];
+              const num = typeof value === "number" ? value : Number(value);
+              return Number.isFinite(num) ? [`${num} units`, label] : ["—", label];
+            }}
+          />
+          <Line
+            type="monotone"
+            dataKey="historical"
+            name="historical"
+            stroke="#0284c7"
+            strokeWidth={2.5}
+            dot={{ r: 3, fill: "#0284c7", strokeWidth: 0 }}
+            activeDot={{ r: 5 }}
+            connectNulls={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="forecast"
+            name="forecast"
+            stroke="#7c3aed"
+            strokeWidth={2}
+            strokeDasharray="6 4"
+            dot={{ r: 4, fill: "#7c3aed", strokeWidth: 0 }}
+            activeDot={{ r: 5 }}
+            connectNulls
+          />
+        </LineChart>
+      </ChartContainer>
+    </div>
   );
 }
 
