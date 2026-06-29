@@ -10,7 +10,7 @@ import { fromLonLat } from "ol/proj";
 import { Fill, Stroke, Style } from "ol/style";
 import { defaults as defaultControls } from "ol/control";
 import { createBasemapSource } from "../../lib/basemaps";
-import { SPATIAL_CONTEXT } from "../../data/cadastralSpatialData";
+import { getSpatialContext } from "../../data/cadastralSpatialData";
 
 export type MapOverlay = {
   id: string;
@@ -52,8 +52,8 @@ function overlayToFeature(overlay: MapOverlay): Feature {
 
 export default function MoreToolsMap({
   overlays,
-  center = SPATIAL_CONTEXT.center,
-  zoom = SPATIAL_CONTEXT.zoom,
+  center = getSpatialContext().center,
+  zoom = getSpatialContext().zoom,
   className = "h-full min-h-[320px] w-full rounded-xl",
 }: MoreToolsMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);

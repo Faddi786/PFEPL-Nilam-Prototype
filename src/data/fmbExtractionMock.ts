@@ -50,10 +50,10 @@ export type FmbExtractionState = {
   canvasLabels: FmbCanvasLabel[];
 };
 
-/** SVG viewBox matches fmb-extract-sample.png (606×382) */
+/** SVG viewBox matches fmb-extract-full.png (606×382) */
 export const FMB_CANVAS_VIEWBOX = { width: 606, height: 382 } as const;
 
-export const FMB_BACKGROUND_URL = "/assets/fmb/fmb-extract-sample.png";
+export const FMB_BACKGROUND_URL = "/assets/fmb/fmb-extract-full.png";
 
 /** Canvas overlay palette — matches FMB extraction reference diagram */
 export const FMB_ORANGE = "#f97316";
@@ -96,19 +96,19 @@ export const FMB_WORKFLOW_STEPS = ["Upload", "Extract", "Review", "Approve"] as 
 export function createInitialFmbExtraction(): FmbExtractionState {
   return {
     vertices: [
-      { id: "vA", x: 112, y: 60, confidence: 96, label: "A", isAnchor: true },
-      { id: "vB", x: 522, y: 139, confidence: 94, label: "B", isAnchor: true },
-      { id: "vBR", x: 525, y: 184, confidence: 91, label: "" },
-      { id: "vBD", x: 490, y: 242, confidence: 88, label: "" },
-      { id: "vD", x: 340, y: 348, confidence: 93, label: "" },
-      { id: "vE", x: 110, y: 328, confidence: 95, label: "" },
-      { id: "vF", x: 111, y: 185, confidence: 92, label: "F", isAnchor: true },
-      { id: "vI1", x: 130, y: 205, confidence: 84, label: "" },
-      { id: "vI2", x: 370, y: 108, confidence: 79, label: "" },
-      { id: "vI3", x: 458, y: 187, confidence: 82, label: "" },
-      { id: "vI4", x: 200, y: 282, confidence: 86, label: "" },
-      { id: "vI5", x: 170, y: 243, confidence: 80, label: "" },
-      { id: "vI6", x: 400, y: 207, confidence: 77, label: "" },
+      { id: "vA", x: 98, y: 52, confidence: 96, label: "A", isAnchor: true },
+      { id: "vB", x: 518, y: 128, confidence: 94, label: "B", isAnchor: true },
+      { id: "vBR", x: 528, y: 178, confidence: 91, label: "" },
+      { id: "vBD", x: 492, y: 238, confidence: 88, label: "" },
+      { id: "vD", x: 328, y: 342, confidence: 93, label: "D" },
+      { id: "vE", x: 102, y: 322, confidence: 95, label: "E" },
+      { id: "vF", x: 100, y: 178, confidence: 92, label: "F", isAnchor: true },
+      { id: "vI1", x: 118, y: 198, confidence: 84, label: "" },
+      { id: "vI2", x: 358, y: 102, confidence: 79, label: "" },
+      { id: "vI3", x: 452, y: 182, confidence: 82, label: "" },
+      { id: "vI4", x: 192, y: 278, confidence: 86, label: "" },
+      { id: "vI5", x: 162, y: 238, confidence: 80, label: "" },
+      { id: "vI6", x: 392, y: 202, confidence: 77, label: "" },
     ],
     edges: [
       {
@@ -169,7 +169,7 @@ export function createInitialFmbExtraction(): FmbExtractionState {
         id: "eBDD",
         from: "vBD",
         to: "vD",
-        lengthM: 71.0,
+        lengthM: 69.4,
         lengthConfidence: 74,
         bearing: "S 38° W",
         bearingConfidence: 70,
@@ -223,7 +223,7 @@ export function createInitialFmbExtraction(): FmbExtractionState {
         id: "eI1I4",
         from: "vI1",
         to: "vI4",
-        lengthM: 69.4,
+        lengthM: 41.2,
         lengthConfidence: 75,
         bearing: "S 42° E",
         bearingConfidence: 72,
@@ -232,7 +232,7 @@ export function createInitialFmbExtraction(): FmbExtractionState {
         id: "eI4D",
         from: "vI4",
         to: "vD",
-        lengthM: 60.4,
+        lengthM: 18.4,
         lengthConfidence: 79,
         bearing: "S 28° E",
         bearingConfidence: 73,
@@ -275,19 +275,30 @@ export function createInitialFmbExtraction(): FmbExtractionState {
       },
     ],
     canvasLabels: [
-      { id: "lbl138", text: "138.2", x: 314, y: 88, confidence: 91, kind: "measurement", linkedEdgeId: "eAB" },
-      { id: "lbl24", text: "24.2", x: 92, y: 118, confidence: 89, kind: "measurement", linkedEdgeId: "eAF" },
-      { id: "lbl73", text: "73.0", x: 532, y: 158, confidence: 88, kind: "measurement", linkedEdgeId: "eBR" },
-      { id: "lbl71", text: "71.0", x: 250, y: 148, confidence: 76, kind: "measurement", linkedEdgeId: "eI1I2" },
-      { id: "lbl27", text: "27.0", x: 100, y: 192, confidence: 83, kind: "measurement", linkedEdgeId: "eI1F" },
-      { id: "lbl542", text: "54.2", x: 504, y: 206, confidence: 72, kind: "measurement", linkedEdgeId: "eBRBD" },
-      { id: "lbl694", text: "69.4", x: 168, y: 236, confidence: 75, kind: "measurement", linkedEdgeId: "eI1I4" },
-      { id: "lbl512", text: "51.2", x: 332, y: 228, confidence: 71, kind: "measurement", linkedEdgeId: "eI4I3" },
-      { id: "lbl1A1", text: "1A1", x: 155, y: 248, confidence: 92, kind: "parcel" },
-      { id: "lbl1B", text: "1B", x: 395, y: 95, confidence: 88, kind: "parcel" },
-      { id: "lbl2A1", text: "2A1", x: 478, y: 168, confidence: 85, kind: "parcel" },
-      { id: "lbl2A1A", text: "2A1A", x: 498, y: 152, confidence: 82, kind: "parcel" },
-      { id: "lbl2A1B", text: "2A1B", x: 468, y: 182, confidence: 80, kind: "parcel" },
+      { id: "lbl138", text: "138.2", x: 306, y: 82, confidence: 91, kind: "measurement", linkedEdgeId: "eAB" },
+      { id: "lbl24", text: "24.2", x: 82, y: 112, confidence: 89, kind: "measurement", linkedEdgeId: "eAF" },
+      { id: "lbl342", text: "34.2", x: 82, y: 252, confidence: 87, kind: "measurement", linkedEdgeId: "eFE" },
+      { id: "lbl604", text: "60.4", x: 210, y: 338, confidence: 90, kind: "measurement", linkedEdgeId: "eED" },
+      { id: "lbl694", text: "69.4", x: 418, y: 298, confidence: 74, kind: "measurement", linkedEdgeId: "eBDD" },
+      { id: "lbl73", text: "73.0", x: 538, y: 148, confidence: 88, kind: "measurement", linkedEdgeId: "eBR" },
+      { id: "lbl71", text: "71.0", x: 238, y: 142, confidence: 76, kind: "measurement", linkedEdgeId: "eI1I2" },
+      { id: "lbl542", text: "54.2", x: 512, y: 202, confidence: 72, kind: "measurement", linkedEdgeId: "eBRBD" },
+      { id: "lbl412", text: "41.2", x: 148, y: 242, confidence: 75, kind: "measurement", linkedEdgeId: "eI1I4" },
+      { id: "lbl184", text: "18.4", x: 368, y: 278, confidence: 68, kind: "measurement", linkedEdgeId: "eI6D" },
+      { id: "lbl1A1", text: "1A1", x: 148, y: 258, confidence: 92, kind: "parcel" },
+      { id: "lbl1A2", text: "1A2", x: 268, y: 118, confidence: 90, kind: "parcel" },
+      { id: "lbl1B", text: "1B", x: 428, y: 118, confidence: 88, kind: "parcel" },
+      { id: "lbl2A1A", text: "2A1A", x: 398, y: 168, confidence: 85, kind: "parcel" },
+      { id: "lbl2A1B", text: "2A1B", x: 478, y: 198, confidence: 82, kind: "parcel" },
+      { id: "lbl2B1B", text: "2B1B", x: 448, y: 248, confidence: 80, kind: "parcel" },
+      { id: "lbl2B1C", text: "2B1C", x: 248, y: 298, confidence: 78, kind: "parcel" },
+      { id: "lbl2B2", text: "2B2", x: 268, y: 228, confidence: 76, kind: "parcel" },
+      { id: "lbl109", text: "109", x: 72, y: 88, confidence: 72, kind: "adjacent" },
+      { id: "lbl108", text: "108", x: 72, y: 248, confidence: 72, kind: "adjacent" },
+      { id: "lbl107", text: "107", x: 72, y: 348, confidence: 72, kind: "adjacent" },
+      { id: "lbl113", text: "113", x: 328, y: 368, confidence: 72, kind: "adjacent" },
+      { id: "lbl112", text: "112", x: 468, y: 348, confidence: 72, kind: "adjacent" },
+      { id: "lbl111", text: "111", x: 558, y: 248, confidence: 72, kind: "adjacent" },
     ],
     textFields: [
       { id: "owner", label: "Owner name", value: "Rajesh Kumar Sharma", confidence: 94 },

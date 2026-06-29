@@ -6,6 +6,7 @@ import {
   RECORD_MAP_CHECKS,
   VARIANCE_BAND_COLORS,
   type AnomalyPipelinePhase,
+  type RecordMapCheck,
   type VarianceBand,
 } from "./anomalyPipelineData";
 import { downloadAnomalyExportBundle } from "../../lib/anomalyExport";
@@ -20,12 +21,25 @@ const STEPS = [
 
 type CheckStatus = "pending" | "running" | "done" | "flagged";
 
-export default function AnomalyPipelineFlow() {
+type AnomalyPipelineFlowProps = {
+  /** FMB workflow parcels — when set, replaces Khutal workbench demo cluster. */
+  parcels?: GeoJSON.Feature<GeoJSON.Polygon>[];
+  /** Scoped record-map checks for FMB sub-parcels. */
+  recordMapChecks?: RecordMapCheck[];
+  /** Fill parent flex column — used inside Parcel Creation workflow. */
+  fillViewport?: boolean;
+};
+
+export default function AnomalyPipelineFlow({
+  parcels,
+  recordMapChecks = RECORD_MAP_CHECKS,
+  fillViewport = false,
+}: AnomalyPipelineFlowProps) {
   const [step, setStep] = useState(0);
   const [phase, setPhase] = useState<AnomalyPipelinePhase>("idle");
   const [bandOpacity, setBandOpacity] = useState(0);
   const [running, setRunning] = useState(false);
-  const [checks, setChecks] = useState<CheckStatus[]>(RECORD_MAP_CHECKS.map(() => "pending"));
+  const [checks, setChecks] = useState<CheckStatus[]>(recordMapChecks.map(() => "pending"));
   const [runId, setRunId] = useState(0);
   const [bandFilter, setBandFilter] = useState<VarianceBand | null>(null);
   const [highlightedParcelIndex, setHighlightedParcelIndex] = useState<number | null>(null);
@@ -66,7 +80,7 @@ export default function AnomalyPipelineFlow() {
   }
 
   function runChecksSequentially() {
-    RECORD_MAP_CHECKS.forEach((check, index) => {
+    recordMapChecks.forEach((check, index) => {
       schedule(() => {
         setChecks((prev) => prev.map((status, i) => (i === index ? "running" : status)));
       }, index * 450);
@@ -85,7 +99,7 @@ export default function AnomalyPipelineFlow() {
   }
 
   function focusCheckParcel(checkId: string) {
-    const check = RECORD_MAP_CHECKS.find((item) => item.id === checkId);
+    const check = recordMapChecks.find((item) => item.id === checkId);
     if (!check || check.flaggedParcelIndices.length === 0) return;
 
     const nextCycle =
@@ -106,7 +120,7 @@ export default function AnomalyPipelineFlow() {
     setStep(0);
     setPhase("satellite");
     setBandOpacity(0);
-    setChecks(RECORD_MAP_CHECKS.map(() => "pending"));
+    setChecks(recordMapChecks.map(() => "pending"));
     setBandFilter(null);
     setCheckFocus(null);
     setHighlightedParcelIndex(null);
@@ -158,6 +172,179 @@ export default function AnomalyPipelineFlow() {
 
   const canFilterBands = phase === "bands" || phase === "boundary" || phase === "complete";
 
+  if (fillViewport) {
+    return (
+      <div className="grid min-h-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[minmax(0,1.45fr)_minmax(260px,1fr)]">
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 lg:p-4">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-[#1A1A1A]">Variance analysis map</h3>
+            </div>
+            <button
+              type="button"
+              onClick={runPipeline}
+              disabled={running}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[#1A1A1A] px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
+            >
+              {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              Run analytics
+            </button>
+          </div>
+
+          <div className="mt-2 min-h-0 flex-1">
+            <AnomalyPipelineMap
+              phase={phase}
+              bandOpacity={bandOpacity}
+              bandFilter={canFilterBands ? bandFilter : null}
+              highlightedParcelIndex={highlightedParcelIndex}
+              parcels={parcels}
+              className="h-full"
+            />
+          </div>
+
+          <div className="mt-2 flex shrink-0 flex-wrap gap-2">
+            {(["green", "amber", "red"] as const).map((band) => {
+              const active = bandFilter === band;
+              return (
+                <button
+                  key={band}
+                  type="button"
+                  disabled={!canFilterBands}
+                  onClick={() => toggleBandFilter(band)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition disabled:opacity-40 ${
+                    active
+                      ? "border-slate-800 bg-slate-900 text-white"
+                      : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"
+                  }`}
+                >
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: VARIANCE_BAND_COLORS[band].fill }}
+                  />
+                  {VARIANCE_BAND_COLORS[band].label} · {VARIANCE_BAND_COLORS[band].threshold}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <div key={runId} className="min-h-0 space-y-3 overflow-y-auto scrollbar-hide">
+          <AnimatePresence initial={false}>
+            {(phase === "idle" || phase === "satellite") && !running ? (
+              <motion.div
+                key="intro"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                className="rounded-2xl border border-dashed border-slate-200 bg-white p-4"
+              >
+                <div className="flex items-center gap-2">
+                  <Radar className="h-4 w-4 text-sky-600" />
+                  <p className="text-sm font-semibold text-[#1A1A1A]">Scheduled analytics run</p>
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                  Celery job scopes Khutal village parcels, compares geometry against RoR extent, overlays digitized
+                  vectors on satellite imagery, and writes variance bands to the anomaly table for dashboard review.
+                </p>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+
+          <AnimatePresence initial={false}>
+            {step >= 3 && checks.some((status) => status !== "pending") ? (
+              <motion.section
+                key="record-checks"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-slate-200 bg-white p-4"
+              >
+                <p className="text-sm font-semibold text-[#1A1A1A]">Run record-map checks</p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Click flagged issues to zoom and cycle through affected parcels.
+                </p>
+                <ul className="mt-3 space-y-2">
+                  {recordMapChecks.map((check, index) => {
+                    const status = checks[index];
+                    const isFlagged = status === "flagged";
+                    const isFocused = checkFocus?.checkId === check.id;
+                    return (
+                      <motion.li
+                        key={check.id}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                      >
+                        <button
+                          type="button"
+                          disabled={!isFlagged}
+                          onClick={() => focusCheckParcel(check.id)}
+                          className={`w-full rounded-xl border px-3 py-2 text-left text-xs transition ${
+                            isFlagged
+                              ? isFocused
+                                ? "border-amber-400 bg-amber-100 text-amber-950 ring-2 ring-amber-300"
+                                : "border-amber-200 bg-amber-50 text-amber-900 hover:border-amber-300"
+                              : status === "done"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                : status === "running"
+                                  ? "border-sky-200 bg-sky-50 text-sky-800"
+                                  : "border-slate-200 bg-slate-50 text-slate-500"
+                          } ${isFlagged ? "cursor-pointer" : "cursor-default"}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-semibold">{check.label}</span>
+                            {status === "running" ? (
+                              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                            ) : status === "done" || status === "flagged" ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                            ) : null}
+                          </div>
+                          {(status === "done" || status === "flagged") && (
+                            <p className="mt-1 text-[11px] opacity-90">{check.detail}</p>
+                          )}
+                          {isFlagged && isFocused ? (
+                            <p className="mt-1 text-[10px] font-medium text-amber-800">
+                              Viewing parcel {(checkFocus?.cycleIndex ?? 0) + 1} of{" "}
+                              {check.flaggedParcelIndices.length} — click again for next
+                            </p>
+                          ) : null}
+                        </button>
+                      </motion.li>
+                    );
+                  })}
+                </ul>
+              </motion.section>
+            ) : null}
+          </AnimatePresence>
+
+          <AnimatePresence initial={false}>
+            {analysisComplete ? (
+              <motion.section
+                key="export"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-slate-200 bg-white p-4"
+              >
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-sky-600 px-4 py-2.5 text-xs font-medium text-white hover:bg-sky-700"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export anomaly list PDF/Excel + variance heat-map
+                </button>
+                {exportMessage ? (
+                  <p className="mt-2 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-[11px] text-sky-800">
+                    {exportMessage}
+                  </p>
+                ) : null}
+              </motion.section>
+            ) : null}
+          </AnimatePresence>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
@@ -183,6 +370,7 @@ export default function AnomalyPipelineFlow() {
               bandOpacity={bandOpacity}
               bandFilter={canFilterBands ? bandFilter : null}
               highlightedParcelIndex={highlightedParcelIndex}
+              parcels={parcels}
               className="h-full"
             />
           </div>
@@ -248,7 +436,7 @@ export default function AnomalyPipelineFlow() {
                   Click flagged issues to zoom and cycle through affected parcels.
                 </p>
                 <ul className="mt-3 space-y-2">
-                  {RECORD_MAP_CHECKS.map((check, index) => {
+                  {recordMapChecks.map((check, index) => {
                     const status = checks[index];
                     const isFlagged = status === "flagged";
                     const isFocused = checkFocus?.checkId === check.id;

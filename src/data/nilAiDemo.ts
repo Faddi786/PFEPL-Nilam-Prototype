@@ -162,21 +162,101 @@ function reportAttachments(): NilAiAttachment[] {
 
 type ScenarioId = "mutation-ne" | "variance-sw" | "report" | "fallback";
 
+/** Keywords checked via case-insensitive substring match on the full prompt. */
+export const NIL_AI_VARIANCE_KEYWORDS = [
+  "highest variance",
+  "area difference",
+  "area diff",
+  "variance band",
+  "variance bands",
+  "variations",
+  "variation",
+  "variance",
+  "anomal",
+  "south-west",
+  "southwest",
+  "agricultur",
+] as const;
+
+export const NIL_AI_MUTATION_KEYWORDS = [
+  "pending mutation",
+  "ownership change",
+  "mutation pending",
+  "north-east",
+  "northeast",
+  "mutation",
+  "mutate",
+  "transfer",
+  "kurumbapet",
+  "corridor",
+  "murbad",
+  "khutal",
+  "pending",
+] as const;
+
+export const NIL_AI_REPORT_KEYWORDS = [
+  "generate report",
+  "cadastral analysis",
+  "attribute table",
+  "analysis report",
+  "spreadsheet",
+  "dashboard",
+  "download",
+  "generate",
+  "certificate",
+  "summary",
+  "analysis",
+  "export",
+  "report",
+  "excel",
+  "pdf",
+] as const;
+
+const SCENARIO_KEYWORDS: Record<Exclude<ScenarioId, "fallback">, readonly string[]> = {
+  "variance-sw": NIL_AI_VARIANCE_KEYWORDS,
+  "mutation-ne": NIL_AI_MUTATION_KEYWORDS,
+  report: NIL_AI_REPORT_KEYWORDS,
+};
+
+/** Higher value wins when keyword length is tied (variance > mutation > report). */
+const SCENARIO_PRIORITY: Record<Exclude<ScenarioId, "fallback">, number> = {
+  "variance-sw": 3,
+  "mutation-ne": 2,
+  report: 1,
+};
+
+function normalizeNilAiPrompt(prompt: string): string {
+  return prompt.toLowerCase().trim().replace(/\s+/g, " ");
+}
+
 function detectScenario(text: string): ScenarioId {
-  if (/report|pdf|analysis|download|export|generate|dashboard|attribute table|spreadsheet|excel/.test(text)) {
-    return "report";
+  const normalized = normalizeNilAiPrompt(text);
+  if (!normalized) return "fallback";
+
+  type Match = { scenario: Exclude<ScenarioId, "fallback">; keyword: string };
+  const matches: Match[] = [];
+
+  for (const scenario of Object.keys(SCENARIO_KEYWORDS) as Exclude<ScenarioId, "fallback">[]) {
+    for (const keyword of SCENARIO_KEYWORDS[scenario]) {
+      if (normalized.includes(keyword)) {
+        matches.push({ scenario, keyword });
+      }
+    }
   }
-  if (/mutation|pending|transfer|khutal|kurumbapet|corridor|north-east|northeast|murbad/.test(text)) {
-    return "mutation-ne";
-  }
-  if (/variance|anomal|amber|red|agricultur|ariyankuppam|lawspet|south-west|southwest|khutal/.test(text)) {
-    return "variance-sw";
-  }
-  return "fallback";
+
+  if (!matches.length) return "fallback";
+
+  matches.sort((a, b) => {
+    const lengthDiff = b.keyword.length - a.keyword.length;
+    if (lengthDiff !== 0) return lengthDiff;
+    return SCENARIO_PRIORITY[b.scenario] - SCENARIO_PRIORITY[a.scenario];
+  });
+
+  return matches[0].scenario;
 }
 
 export function resolveNilAiPrompt(prompt: string, features: ParcelFeature[]): NilAiResult {
-  const text = prompt.toLowerCase().trim();
+  const text = normalizeNilAiPrompt(prompt);
   if (!text) {
     return {
       reply: [

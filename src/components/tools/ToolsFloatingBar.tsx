@@ -104,6 +104,9 @@ const SPATIAL_BY_CATEGORY = (["queries", "operations", "analysis", "quality"] as
   }),
 );
 
+/** Toggle Mutation toolbar dropdown; mutation state and handlers remain wired. */
+const SHOW_MUTATION_DROPDOWN = false;
+
 type Props = {
   activeTransform?: TransformMethod | null;
   activeSpatial?: MoreToolsTabId | null;
@@ -142,26 +145,28 @@ export default function ToolsFloatingBar({
         />
       </ToolDropdown>
 
-      <ToolDropdown label="Mutation" icon={PenTool} active={Boolean(activeMutation)}>
-        <MenuButton
-          label="Split parcel"
-          icon={Scissors}
-          onClick={() => onMutationSelect("split")}
-          active={activeMutation === "split"}
-        />
-        <MenuButton
-          label="Merge parcels"
-          icon={Merge}
-          onClick={() => onMutationSelect("merge")}
-          active={activeMutation === "merge"}
-        />
-        <MenuButton
-          label="Edit vertex"
-          icon={Move3d}
-          onClick={() => onMutationSelect("vertex-edit")}
-          active={activeMutation === "vertex-edit"}
-        />
-      </ToolDropdown>
+      {SHOW_MUTATION_DROPDOWN ? (
+        <ToolDropdown label="Mutation" icon={PenTool} active={Boolean(activeMutation)}>
+          <MenuButton
+            label="Split parcel"
+            icon={Scissors}
+            onClick={() => onMutationSelect("split")}
+            active={activeMutation === "split"}
+          />
+          <MenuButton
+            label="Merge parcels"
+            icon={Merge}
+            onClick={() => onMutationSelect("merge")}
+            active={activeMutation === "merge"}
+          />
+          <MenuButton
+            label="Edit vertex"
+            icon={Move3d}
+            onClick={() => onMutationSelect("vertex-edit")}
+            active={activeMutation === "vertex-edit"}
+          />
+        </ToolDropdown>
+      ) : null}
 
       <ToolDropdown label="Spatial" icon={Shapes} active={Boolean(activeSpatial)}>
         <div className="tools-spatial-menu py-1">

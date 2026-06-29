@@ -1,14 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowLeft,
-  ArrowRight,
   CheckCircle2,
   Loader2,
   Play,
   Save,
   ScanLine,
-  Upload,
 } from "lucide-react";
 import FmbExtractionCanvas from "../fmb/FmbExtractionCanvas";
 import WarpCanvas from "../warp/WarpCanvas";
@@ -17,16 +14,22 @@ import AnomalyPipelineFlow from "./AnomalyPipelineFlow";
 import AutocadWorkflowFlow from "./AutocadWorkflowFlow";
 import AutocadStepSwitcher from "./AutocadStepSwitcher";
 import MutationDocumentVerification from "./MutationDocumentVerification";
-import { DEFAULT_REGION_KEY } from "../../data/mockData";
-import { getWorkbenchRegionDatasetSync } from "../../data/workbenchParcels";
 import {
   createInitialFmbExtraction,
   type FmbExtractionState,
 } from "../../data/fmbExtractionMock";
 import {
+  buildFmbWorkflowGeometry,
+  buildGcpsFromFmb,
+  buildWarpMeshFromFmb,
+  buildFmbParcelContext,
+  fmbParcelsToGeoJSON,
+  FMB_RECORD_MAP_CHECKS,
+  type FmbWorkflowGeometry,
+} from "../../lib/fmbWorkflowGeometry";
+import {
   computeRmsError,
   GDAL_PANEL_DEFAULTS,
-  INITIAL_GCPS,
   TRANSFORM_MODES,
   WARP_CONTEXT,
   type GcpAnchor,
@@ -41,79 +44,153 @@ const PHASE_LABELS = [
   "Cadastral Edit",
 ] as const;
 
-type FmbPhase = "upload" | "extracting" | "review" | "approved";
+export type FmbDemoNavState = {
+  phase: "idle" | "uploaded" | "digitizing" | "review" | "approved";
+  description: string;
+  onUpload: () => void;
+  onDigitize: () => void;
+  onAccept: () => void;
+  canUpload: boolean;
+  canDigitize: boolean;
+  isDigitizing: boolean;
+  showAccept: boolean;
+  acceptDisabled: boolean;
+  acceptLabel: string;
+};
+
+export type ParcelWorkflowNavState = {
+  phase: number;
+  phaseCount: number;
+  phaseLabel: string;
+  pageTitle: string;
+  pageDescription?: string;
+  canGoBack: boolean;
+  canGoNext: boolean;
+  nextLabel: string;
+  goBack: () => void;
+  goNext: () => void;
+  fmbDemo?: FmbDemoNavState | null;
+};
+
+type ParcelCreationManagementFlowProps = {
+  onNavStateChange?: (state: ParcelWorkflowNavState) => void;
+};
+
+type FmbPhase = "idle" | "uploaded" | "digitizing" | "review" | "approved";
+
+const EMPTY_FMB_EXTRACTION: FmbExtractionState = {
+  vertices: [],
+  edges: [],
+  textFields: [],
+  parcelNumber: { value: "", confidence: 0 },
+  canvasLabels: [],
+};
+
+function noopFmbStateChange(_state: FmbExtractionState) {}
+
+function fmbPhaseDescription(phase: FmbPhase): string {
+  switch (phase) {
+    case "idle":
+      return "Upload an FMB scan, then digitize to extract geometry for review.";
+    case "uploaded":
+      return "Document loaded — run digitization to extract parcel geometry.";
+    case "digitizing":
+      return "AI digitization in progress…";
+    default:
+      return "Review extracted geometry on the canvas, then accept to continue.";
+  }
+}
+
+function fmbDemoNavScalarsEqual(
+  a: FmbDemoNavState | null | undefined,
+  b: FmbDemoNavState | null | undefined,
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.phase === b.phase &&
+    a.description === b.description &&
+    a.canUpload === b.canUpload &&
+    a.canDigitize === b.canDigitize &&
+    a.isDigitizing === b.isDigitizing &&
+    a.showAccept === b.showAccept &&
+    a.acceptDisabled === b.acceptDisabled &&
+    a.acceptLabel === b.acceptLabel
+  );
+}
 
 function FmbExtractionPhase({
   onComplete,
+  onStateChange,
+  onFmbDemoStateChange,
 }: {
-  onComplete: () => void;
+  onComplete: (geometry: FmbWorkflowGeometry) => void;
+  onStateChange: (state: FmbExtractionState) => void;
+  onFmbDemoStateChange?: (state: FmbDemoNavState) => void;
 }) {
-  const [phase, setPhase] = useState<FmbPhase>("review");
-  const [extractionState, setExtractionState] = useState<FmbExtractionState>(() =>
-    createInitialFmbExtraction(),
-  );
+  const [phase, setPhase] = useState<FmbPhase>("idle");
+  const [extractionState, setExtractionState] = useState<FmbExtractionState>(EMPTY_FMB_EXTRACTION);
   const [selectedVertexId, setSelectedVertexId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const onStateChangeRef = useRef(onStateChange);
+  onStateChangeRef.current = onStateChange;
+  const lastFmbDemoNavRef = useRef<FmbDemoNavState | null>(null);
 
-  const startExtraction = useCallback(() => {
-    setPhase("extracting");
-    window.setTimeout(() => setPhase("review"), 2400);
+  const handleUpload = useCallback(() => {
+    setPhase("uploaded");
   }, []);
 
-  useEffect(() => {
-    if (phase !== "review") return;
-    setExtractionState(createInitialFmbExtraction());
-  }, [phase]);
+  const handleDigitize = useCallback(() => {
+    setPhase("digitizing");
+    window.setTimeout(() => {
+      const initial = createInitialFmbExtraction();
+      setExtractionState(initial);
+      onStateChangeRef.current(initial);
+      setPhase("review");
+    }, 4000);
+  }, []);
 
-  function handleAccept() {
+  const handleAccept = useCallback(() => {
     setSubmitted(true);
     setPhase("approved");
-    onComplete();
-  }
+    onComplete(buildFmbWorkflowGeometry(extractionState));
+  }, [extractionState, onComplete]);
+
+  useEffect(() => {
+    onStateChangeRef.current(extractionState);
+  }, [extractionState]);
+
+  useEffect(() => {
+    const next: FmbDemoNavState = {
+      phase,
+      description: fmbPhaseDescription(phase),
+      onUpload: handleUpload,
+      onDigitize: handleDigitize,
+      onAccept: handleAccept,
+      canUpload: phase === "idle",
+      canDigitize: phase === "uploaded",
+      isDigitizing: phase === "digitizing",
+      showAccept: phase === "review" || phase === "approved",
+      acceptDisabled: submitted,
+      acceptLabel: submitted ? "Extraction accepted" : "Accept extraction",
+    };
+    if (fmbDemoNavScalarsEqual(lastFmbDemoNavRef.current, next)) return;
+    lastFmbDemoNavRef.current = next;
+    onFmbDemoStateChange?.(next);
+  }, [phase, submitted, handleUpload, handleDigitize, handleAccept, onFmbDemoStateChange]);
+
+  const imageVisible = phase !== "idle";
+  const geometryVisible = phase === "review" || phase === "approved";
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-semibold text-[#1A1A1A]">FMB extraction</h3>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Upload FMB scan, run AI extraction, and review geometry on the canvas before accepting.
-          </p>
-        </div>
-        {phase === "upload" ? (
-          <button
-            type="button"
-            onClick={startExtraction}
-            className="inline-flex items-center gap-1.5 rounded-full bg-sky-600 px-4 py-2 text-xs font-medium text-white"
-          >
-            <Upload className="h-3.5 w-3.5" />
-            Upload &amp; Extract
-          </button>
-        ) : phase === "extracting" ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-medium text-sky-800">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            AI extraction running…
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={handleAccept}
-            disabled={submitted}
-            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-xs font-medium text-white disabled:opacity-40"
-          >
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            {submitted ? "Extraction accepted" : "Accept extraction"}
-          </button>
-        )}
-      </div>
-
-      <div className="flex min-h-[min(54vh,504px)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="flex shrink-0 items-center gap-2 border-b border-slate-100 px-3 py-2">
           <ScanLine className="h-4 w-4 text-sky-600" />
           <span className="text-xs font-semibold">Geometry canvas</span>
         </div>
-        <div className="min-h-0 flex-1">
+        <div className="relative min-h-0 flex-1 w-full">
           <FmbExtractionCanvas
             state={extractionState}
             onStateChange={setExtractionState}
@@ -121,7 +198,9 @@ function FmbExtractionPhase({
             selectedEdgeId={selectedEdgeId}
             onSelectVertex={setSelectedVertexId}
             onSelectEdge={setSelectedEdgeId}
-            extractionVisible={phase !== "upload"}
+            imageVisible={imageVisible}
+            geometryVisible={geometryVisible}
+            isDigitizing={phase === "digitizing"}
           />
         </div>
       </div>
@@ -130,11 +209,16 @@ function FmbExtractionPhase({
 }
 
 function GeoreferencePhase({
+  fmbGeometry,
   onComplete,
 }: {
+  fmbGeometry: FmbWorkflowGeometry;
   onComplete: () => void;
 }) {
-  const [gcps, setGcps] = useState<GcpAnchor[]>(() => INITIAL_GCPS.map((g) => ({ ...g })));
+  const warpMesh = useMemo(() => buildWarpMeshFromFmb(fmbGeometry), [fmbGeometry]);
+  const initialGcps = useMemo(() => buildGcpsFromFmb(fmbGeometry), [fmbGeometry]);
+
+  const [gcps, setGcps] = useState<GcpAnchor[]>(() => initialGcps.map((g) => ({ ...g })));
   const [mode, setMode] = useState<TransformMode>("warp");
   const [warped, setWarped] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -155,12 +239,12 @@ function GeoreferencePhase({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold text-[#1A1A1A]">Georeferencing</h3>
           <p className="mt-0.5 text-xs text-slate-500">
-            {WARP_CONTEXT.village} · {WARP_CONTEXT.sheet} → {WARP_CONTEXT.orthomosaic}
+            {fmbGeometry.village} · FMB {fmbGeometry.parcelNumber} → {WARP_CONTEXT.orthomosaic}
           </p>
         </div>
         <button
@@ -174,8 +258,8 @@ function GeoreferencePhase({
         </button>
       </div>
 
-      <div className="grid min-h-[min(52vh,480px)] gap-3 lg:grid-cols-[minmax(180px,220px)_1fr_minmax(200px,240px)]">
-        <div className="space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3">
+      <div className="grid min-h-0 flex-1 gap-2 overflow-hidden lg:grid-cols-[minmax(150px,12vw)_minmax(0,1fr)_minmax(170px,14vw)]">
+        <div className="min-h-0 max-h-full space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2.5">
           <h4 className="text-xs font-semibold text-slate-800">Transform mode</h4>
           {TRANSFORM_MODES.map((t) => (
             <button
@@ -193,19 +277,33 @@ function GeoreferencePhase({
           ))}
         </div>
 
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
-          <div className="flex shrink-0 items-center justify-between border-b border-slate-700 px-3 py-2">
+        <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-700 px-3 py-1.5">
             <span className="text-xs font-semibold text-white">Before / after overlay</span>
             <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
               RMS {warped ? `${rms.toFixed(2)} m` : "—"}
             </span>
           </div>
-          <div className="min-h-0 flex-1 p-2">
-            <WarpCanvas gcps={gcps} onGcpsChange={setGcps} mode={mode} warped={warped} />
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-1.5">
+            <div className="h-full w-full max-h-full min-h-0 max-w-full">
+              <WarpCanvas
+              gcps={gcps}
+              onGcpsChange={setGcps}
+              mode={mode}
+              warped={warped}
+              meshVertices={warpMesh.meshVertices}
+              innerParcels={warpMesh.innerParcels}
+              stretch={stretch}
+              rotateDeg={rotateDeg}
+              offsetX={offsetX}
+              offsetY={offsetY}
+              livePreview
+            />
+            </div>
           </div>
         </div>
 
-        <div className="overflow-y-auto rounded-xl border border-slate-200 bg-white p-3">
+        <div className="min-h-0 max-h-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-2.5">
           <WarpProcessingPanel
             stretch={stretch}
             rotateDeg={rotateDeg}
@@ -229,59 +327,128 @@ function GeoreferencePhase({
   );
 }
 
-export default function ParcelCreationManagementFlow() {
+export default function ParcelCreationManagementFlow({
+  onNavStateChange,
+}: ParcelCreationManagementFlowProps = {}) {
   const [phase, setPhase] = useState(0);
   const [completedThrough, setCompletedThrough] = useState(-1);
   const [parcelSaved, setParcelSaved] = useState(false);
   const [mutationAccepted, setMutationAccepted] = useState(false);
   const [autocadStep, setAutocadStep] = useState(0);
   const [, setMutationSopStep] = useState(0);
+  const [fmbGeometry, setFmbGeometry] = useState<FmbWorkflowGeometry | null>(null);
+  const [fmbDemoNav, setFmbDemoNav] = useState<FmbDemoNavState | null>(null);
 
-  const demoParcel = useMemo(() => {
-    const dataset = getWorkbenchRegionDatasetSync(DEFAULT_REGION_KEY);
-    const parcels = dataset.geojson.parcels.features as GeoJSON.Feature<GeoJSON.Polygon>[];
-    return (
-      parcels.find((feature) => String(feature.properties?.surveyNo ?? "").includes("/")) ??
-      parcels[0]
-    );
-  }, []);
+  const fmbParcels = useMemo(
+    () => (fmbGeometry ? fmbParcelsToGeoJSON(fmbGeometry) : undefined),
+    [fmbGeometry],
+  );
 
   const parcelContext = useMemo(
-    () => ({
-      surveyNo: String(demoParcel.properties?.surveyNo ?? "—"),
-      village: String(demoParcel.properties?.village ?? "—"),
-      ulpin: String(demoParcel.properties?.ulpin ?? "—"),
-      ownerName: String(demoParcel.properties?.ownerName ?? "Rajesh Kumar Sharma"),
-    }),
-    [demoParcel],
+    () => (fmbGeometry ? buildFmbParcelContext(fmbGeometry) : null),
+    [fmbGeometry],
   );
 
   function markPhaseComplete(phaseIndex: number) {
     setCompletedThrough((prev) => Math.max(prev, phaseIndex));
   }
 
-  function goNext() {
-    if (phase < PHASE_LABELS.length - 1) {
-      setPhase((p) => p + 1);
-    }
-  }
+  const goBack = useCallback(() => {
+    setPhase((p) => (p > 0 ? p - 1 : p));
+  }, []);
 
-  function goBack() {
-    if (phase > 0) {
-      setPhase((p) => p - 1);
-    }
-  }
+  const goNext = useCallback(() => {
+    setPhase((p) => (p < PHASE_LABELS.length - 1 ? p + 1 : p));
+  }, []);
 
   function handleSaveParcel() {
     setParcelSaved(true);
     markPhaseComplete(2);
   }
 
-  const canGoNext = phase < 2 ? completedThrough >= phase : phase === 2 ? completedThrough >= 2 : true;
+  const canGoBack = phase > 0;
+  const canGoNext = phase < PHASE_LABELS.length - 1;
+
+  const nextLabel =
+    phase === 2
+      ? "Continue to mutation"
+      : phase === 3
+        ? "Continue to cadastral edit"
+        : "Next";
+
+  const lastNavReportRef = useRef<{
+    phase: number;
+    phaseCount: number;
+    phaseLabel: string;
+    pageTitle: string;
+    pageDescription?: string;
+    canGoBack: boolean;
+    canGoNext: boolean;
+    nextLabel: string;
+    fmbDemo: FmbDemoNavState | null;
+  } | null>(null);
+
+  const pageTitle = phase === 0 ? "FMB extraction" : "";
+  const pageDescription = phase === 0 ? fmbDemoNav?.description : undefined;
+
+  useLayoutEffect(() => {
+    const fmbDemo = phase === 0 ? fmbDemoNav : null;
+    const prev = lastNavReportRef.current;
+    if (
+      prev &&
+      prev.phase === phase &&
+      prev.phaseCount === PHASE_LABELS.length &&
+      prev.phaseLabel === PHASE_LABELS[phase] &&
+      prev.pageTitle === pageTitle &&
+      prev.pageDescription === pageDescription &&
+      prev.canGoBack === canGoBack &&
+      prev.canGoNext === canGoNext &&
+      prev.nextLabel === nextLabel &&
+      fmbDemoNavScalarsEqual(prev.fmbDemo, fmbDemo)
+    ) {
+      return;
+    }
+    lastNavReportRef.current = {
+      phase,
+      phaseCount: PHASE_LABELS.length,
+      phaseLabel: PHASE_LABELS[phase],
+      pageTitle,
+      pageDescription,
+      canGoBack,
+      canGoNext,
+      nextLabel,
+      fmbDemo,
+    };
+    onNavStateChange?.({
+      phase,
+      phaseCount: PHASE_LABELS.length,
+      phaseLabel: PHASE_LABELS[phase],
+      pageTitle,
+      pageDescription,
+      canGoBack,
+      canGoNext,
+      nextLabel,
+      goBack,
+      goNext,
+      fmbDemo,
+    });
+  }, [
+    onNavStateChange,
+    phase,
+    pageTitle,
+    pageDescription,
+    canGoBack,
+    canGoNext,
+    nextLabel,
+    goBack,
+    goNext,
+    fmbDemoNav,
+  ]);
+
   const showSaveAfterAnomaly = phase === 2 && completedThrough >= 2 && !parcelSaved;
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
       <AnimatePresence mode="wait">
         <motion.div
           key={phase}
@@ -289,50 +456,69 @@ export default function ParcelCreationManagementFlow() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -4 }}
           transition={{ duration: 0.22 }}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
         >
           {phase === 0 ? (
             <FmbExtractionPhase
-              onComplete={() => {
+              onStateChange={noopFmbStateChange}
+              onFmbDemoStateChange={setFmbDemoNav}
+              onComplete={(geometry) => {
+                setFmbGeometry(geometry);
                 markPhaseComplete(0);
                 setPhase(1);
               }}
             />
           ) : null}
 
-          {phase === 1 ? (
-            <GeoreferencePhase onComplete={() => markPhaseComplete(1)} />
+          {phase === 1 && fmbGeometry ? (
+            <GeoreferencePhase fmbGeometry={fmbGeometry} onComplete={() => markPhaseComplete(1)} />
           ) : null}
 
-          {phase === 2 ? (
-            <div className="space-y-3">
-              <div>
+          {phase === 2 && fmbGeometry ? (
+            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+              <div className="shrink-0">
                 <h3 className="text-sm font-semibold text-[#1A1A1A]">Anomaly quality control</h3>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Run variance bands and record-map checks before publishing the parcel.
+                  Variance bands and record-map checks on FMB sub-parcels (
+                  {Object.keys(fmbGeometry.parcelPolygons).join(", ")}).
                 </p>
               </div>
-              <AnomalyPipelineFlow />
+              <AnomalyPipelineFlow
+                parcels={fmbParcels}
+                recordMapChecks={FMB_RECORD_MAP_CHECKS}
+                fillViewport
+              />
               {!completedThrough || completedThrough < 2 ? (
                 <button
                   type="button"
                   onClick={() => markPhaseComplete(2)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Mark anomaly QC complete
+                </button>
+              ) : showSaveAfterAnomaly ? (
+                <button
+                  type="button"
+                  onClick={handleSaveParcel}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-xs font-medium text-white"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  Save parcel
                 </button>
               ) : null}
             </div>
           ) : null}
 
-          {phase === 3 ? (
-            <div className="space-y-3">
-              <div>
+          {phase === 3 && parcelContext ? (
+            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+              <div className="shrink-0">
                 <h3 className="text-sm font-semibold text-[#1A1A1A]">Mutation &amp; document verification</h3>
                 <p className="mt-0.5 text-xs text-slate-500">
                   Upload mutation documents, run AI verification, and accept before cadastral editing.
                 </p>
               </div>
+              <div className="min-h-0 flex-1 overflow-y-auto scrollbar-hide">
               {!mutationAccepted ? (
                 <MutationDocumentVerification
                   parcelContext={parcelContext}
@@ -348,21 +534,27 @@ export default function ParcelCreationManagementFlow() {
                   cadastral editing.
                 </div>
               )}
+              </div>
             </div>
           ) : null}
 
-          {phase === 4 ? (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+          {phase === 4 && fmbGeometry ? (
+            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-semibold text-[#1A1A1A]">Cadastral edit</h3>
                   <p className="mt-0.5 text-xs text-slate-500">
-                    Bhunaksha cadastral tools — split, digitise, baseline/offset, subdivision, and merge.
+                    Bhunaksha cadastral tools — split, digitise, baseline/offset, subdivision, and merge on FMB geometry.
                   </p>
                 </div>
                 <AutocadStepSwitcher step={autocadStep} onStepChange={setAutocadStep} />
               </div>
-              <AutocadWorkflowFlow step={autocadStep} onStepChange={setAutocadStep} />
+              <AutocadWorkflowFlow
+                step={autocadStep}
+                onStepChange={setAutocadStep}
+                fmbGeometry={fmbGeometry}
+                fillViewport
+              />
             </div>
           ) : null}
         </motion.div>
@@ -372,69 +564,13 @@ export default function ParcelCreationManagementFlow() {
         <motion.div
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"
+          className="shrink-0 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"
         >
           <CheckCircle2 className="mb-1 inline h-4 w-4" />
-          Parcel KAR-2024-00847 saved after anomaly QC. Mutation and cadastral edit remain available when needed.
+          Parcel {fmbGeometry?.parcelNumber ?? "KAR-2024-00847"} saved after anomaly QC. Mutation and cadastral edit
+          remain available when needed.
         </motion.div>
       ) : null}
-
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-        <button
-          type="button"
-          onClick={goBack}
-          disabled={phase === 0}
-          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 disabled:opacity-40"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back
-        </button>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {showSaveAfterAnomaly ? (
-            <button
-              type="button"
-              onClick={handleSaveParcel}
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-xs font-medium text-white"
-            >
-              <Save className="h-3.5 w-3.5" />
-              Save parcel
-            </button>
-          ) : null}
-
-          {phase === 2 && completedThrough >= 2 ? (
-            <button
-              type="button"
-              onClick={() => setPhase(3)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-sky-300 bg-sky-50 px-4 py-2 text-xs font-medium text-sky-800"
-            >
-              Continue to mutation
-              <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
-
-          {phase < PHASE_LABELS.length - 1 && phase !== 2 ? (
-            <button
-              type="button"
-              onClick={goNext}
-              disabled={!canGoNext}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[#1A1A1A] px-4 py-2 text-xs font-medium text-white disabled:opacity-40"
-            >
-              Next
-              <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          ) : phase === 3 && mutationAccepted ? (
-            <button
-              type="button"
-              onClick={goNext}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[#1A1A1A] px-4 py-2 text-xs font-medium text-white"
-            >
-              Continue to cadastral edit
-              <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
-        </div>
-      </div>
     </div>
   );
 }

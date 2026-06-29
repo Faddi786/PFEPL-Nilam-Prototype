@@ -24,6 +24,8 @@ import {
   type AdminBoundaryLayerId,
 } from "../data/adminBoundaries";
 import { CROP_COLORS, CROP_TYPES } from "./thematicLayers";
+import { extendCutLineAcrossPolygon, splitPolygonByLine as turfSplitByLine } from "./splitPolygon";
+import type { SelectEvent } from "ol/interaction/Select";
 
 /** Legacy demo admin bbox grids — not shown on the workbench map. */
 const LEGACY_MOCK_ADMIN_LAYER_IDS = ["region", "taluk", "village", "ward"] as const;
@@ -76,7 +78,7 @@ type Callbacks = {
     data: { fmbText: string; properties: Record<string, unknown> },
     position: { pixel: Coordinate; mapCoord: Coordinate },
   ) => void;
-  onMapClick?: (pixel: Coordinate, hasParcel: boolean) => void;
+  onMapClick?: (pixel: Coordinate, hasParcel: boolean, modifiers?: { shiftKey?: boolean }) => void;
   onToast?: (message: string) => void;
   onSelectionChange?: (parcel: Record<string, any> | null) => void;
 };
@@ -117,8 +119,16 @@ type EngineInstance = {
   runAmalgamation: () => { ok: boolean; reason?: string };
   commitParcelGeometry: (parcelId: string) => boolean;
   submitMutationForApproval: (parcelId: string) => boolean;
-  highlightParcels: (ids: string[], options?: { colorByVariance?: boolean }) => void;
+  highlightParcels: (
+    ids: string[],
+    options?: { colorByVariance?: boolean; areaSelect?: boolean },
+  ) => void;
   clearHighlights: () => void;
+  clearOverlayHighlights: () => void;
+  clearAreaSelection: () => void;
+  hasAreaSelection: () => boolean;
+  getSelectedParcelCount: () => number;
+  abortActiveDrawing: () => boolean;
   clearInteractions: () => void;
   dispose: () => void;
 };
@@ -184,60 +194,6 @@ function unionWithGapTolerance(features: GeoJSON.Feature[]) {
   return { feature: best, parts: bestParts };
 }
 
-function lineSide(a: [number, number], b: [number, number], p: [number, number]) {
-  return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
-}
-
-function intersectSegmentWithLine(
-  s: [number, number],
-  e: [number, number],
-  a: [number, number],
-  b: [number, number],
-): [number, number] | null {
-  const dx = e[0] - s[0];
-  const dy = e[1] - s[1];
-  const lx = b[0] - a[0];
-  const ly = b[1] - a[1];
-  const denom = dx * ly - dy * lx;
-  if (Math.abs(denom) < 1e-12) return null;
-  const t = ((a[0] - s[0]) * ly - (a[1] - s[1]) * lx) / denom;
-  return [s[0] + t * dx, s[1] + t * dy];
-}
-
-function clipRingWithLine(
-  ring: [number, number][],
-  a: [number, number],
-  b: [number, number],
-  keepLeft: boolean,
-): [number, number][] {
-  const out: [number, number][] = [];
-  if (!ring.length) return out;
-
-  for (let i = 0; i < ring.length - 1; i += 1) {
-    const s = ring[i];
-    const e = ring[i + 1];
-    const sIn = keepLeft ? lineSide(a, b, s) >= 0 : lineSide(a, b, s) <= 0;
-    const eIn = keepLeft ? lineSide(a, b, e) >= 0 : lineSide(a, b, e) <= 0;
-
-    if (sIn && eIn) {
-      out.push(e);
-    } else if (sIn && !eIn) {
-      const ip = intersectSegmentWithLine(s, e, a, b);
-      if (ip) out.push(ip);
-    } else if (!sIn && eIn) {
-      const ip = intersectSegmentWithLine(s, e, a, b);
-      if (ip) out.push(ip);
-      out.push(e);
-    }
-  }
-
-  if (!out.length) return out;
-  const first = out[0];
-  const last = out[out.length - 1];
-  if (first[0] !== last[0] || first[1] !== last[1]) out.push(first);
-  return out;
-}
-
 const COLLINEAR_AREA_EPS = 1e-14;
 const SIMPLIFY_TOLERANCE_DEG = 5e-6;
 
@@ -289,26 +245,6 @@ function simplifyParcelGeoJson(feature: GeoJSON.Feature): GeoJSON.Feature | null
     return null;
   }
   return null;
-}
-
-function splitPolygonByLine(
-  parcelGeo: GeoJSON.Feature<GeoJSON.Polygon>,
-  lineCoords: [number, number][],
-): [GeoJSON.Feature<GeoJSON.Polygon>, GeoJSON.Feature<GeoJSON.Polygon>] | null {
-  if (lineCoords.length < 2) return null;
-
-  const ring = parcelGeo.geometry.coordinates[0] as [number, number][];
-  const a = lineCoords[0];
-  const b = lineCoords[lineCoords.length - 1];
-  const leftRing = clipRingWithLine(ring, a, b, true);
-  const rightRing = clipRingWithLine(ring, a, b, false);
-  if (leftRing.length < 4 || rightRing.length < 4) return null;
-
-  const leftPoly = turf.polygon([leftRing]);
-  const rightPoly = turf.polygon([rightRing]);
-  if (turf.area(leftPoly) < 4 || turf.area(rightPoly) < 4) return null;
-
-  return [leftPoly, rightPoly];
 }
 
 export function createMapEngine(
@@ -877,15 +813,16 @@ export function createMapEngine(
       zIndex: 9,
       style: (feature, resolution) => {
         const selected = Boolean(feature.get("selected"));
+        const areaHighlight = Boolean(feature.get("areaHighlight"));
         const varianceHighlight = Boolean(feature.get("varianceHighlight"));
         const hovered = Boolean(feature.get("hovered"));
-        const highlighted = selected || varianceHighlight || hovered;
+        const highlighted = selected || areaHighlight || varianceHighlight || hovered;
         const band = parcelVarianceBand(feature as Feature<Geometry>);
         let strokeWidth = parcelEditDisplayMode ? 1 : 0.65;
         const label = parcelLabelStyle(feature as Feature<Geometry>, resolution);
         const labelGeometry = label ? parcelLabelGeometry(feature as Feature<Geometry>) : undefined;
 
-        if (selected || varianceHighlight) {
+        if (selected || areaHighlight || varianceHighlight) {
           strokeWidth = 1.4;
         } else if (hovered) {
           strokeWidth = 1.15;
@@ -1057,8 +994,58 @@ export function createMapEngine(
   map.addInteraction(select);
 
   let hoveredParcelId: string | null = null;
+  let pendingMutationHandler: ((event: SelectEvent) => void) | null = null;
 
   const activeInteractions: Array<Modify | Draw | Snap> = [];
+
+  function clearPendingMutationHandler() {
+    if (pendingMutationHandler) {
+      select.un("select", pendingMutationHandler);
+      pendingMutationHandler = null;
+    }
+  }
+
+  function requireParcelSelection(minCount: number, onReady: () => void, waitingMessage: string) {
+    if (select.getFeatures().getLength() >= minCount) {
+      onReady();
+      return;
+    }
+    callbacks.onToast?.(waitingMessage);
+    clearPendingMutationHandler();
+    pendingMutationHandler = () => {
+      if (select.getFeatures().getLength() >= minCount) {
+        clearPendingMutationHandler();
+        onReady();
+      }
+    };
+    select.on("select", pendingMutationHandler);
+  }
+
+  function parcelPolygonForSplit(parcelGeo: GeoJSON.Feature): GeoJSON.Feature<GeoJSON.Polygon> | null {
+    const geometry = parcelGeo.geometry;
+    if (!geometry) return null;
+    if (geometry.type === "Polygon") {
+      return parcelGeo as GeoJSON.Feature<GeoJSON.Polygon>;
+    }
+    if (geometry.type === "MultiPolygon") {
+      let bestCoords: GeoJSON.Position[][] | null = null;
+      let bestArea = 0;
+      for (const coords of geometry.coordinates) {
+        const poly = turf.polygon(coords);
+        const area = turf.area(poly);
+        if (area > bestArea) {
+          bestArea = area;
+          bestCoords = coords;
+        }
+      }
+      if (!bestCoords) return null;
+      return {
+        ...parcelGeo,
+        geometry: { type: "Polygon", coordinates: bestCoords },
+      } as GeoJSON.Feature<GeoJSON.Polygon>;
+    }
+    return null;
+  }
 
   function refreshStyledLayers() {
     layerMap.parcels.changed();
@@ -1235,7 +1222,22 @@ export function createMapEngine(
     refreshStyledLayers();
   }
 
+  function abortActiveDrawing() {
+    let aborted = false;
+    activeInteractions.forEach((interaction) => {
+      if (interaction instanceof Draw) {
+        interaction.abortDrawing();
+        aborted = true;
+      }
+    });
+    if (aborted) {
+      analysisSource.clear();
+    }
+    return aborted;
+  }
+
   function clearInteractions() {
+    clearPendingMutationHandler();
     activeInteractions.forEach((interaction) => {
       if (interaction instanceof Draw) {
         interaction.abortDrawing();
@@ -1245,6 +1247,7 @@ export function createMapEngine(
     activeInteractions.length = 0;
     analysisSource.clear();
     exitParcelEditDisplayMode();
+    select.setActive(true);
   }
 
   function resetTools(silent = false) {
@@ -1441,18 +1444,21 @@ export function createMapEngine(
     if (parcel) {
       callbacks.onParcelClick?.(parcelToRecord(parcel as Feature<Geometry>), mapCoord);
     }
-    callbacks.onMapClick?.(pixel, Boolean(parcel));
+    callbacks.onMapClick?.(pixel, Boolean(parcel), {
+      shiftKey: Boolean((event.originalEvent as MouseEvent | undefined)?.shiftKey),
+    });
   });
 
   function startVertexEdit() {
     clearInteractions();
     const selected = select.getFeatures();
     if (selected.getLength() === 0) {
-      callbacks.onToast?.("Select a parcel before vertex edit");
+      requireParcelSelection(1, startVertexEdit, "Select a parcel to edit its vertices");
       return;
     }
 
     enterParcelEditDisplayMode();
+    select.setActive(false);
     selected.forEach((feature) => normalizeOlParcelGeometry(feature as Feature<Geometry>));
     const geometryBackup = new globalThis.Map<Feature<Geometry>, string>();
 
@@ -1507,36 +1513,52 @@ export function createMapEngine(
 
   function splitSelectedWithDraw() {
     clearInteractions();
+    if (select.getFeatures().getLength() === 0) {
+      requireParcelSelection(1, splitSelectedWithDraw, "Select one parcel, then draw a split line");
+      return;
+    }
+
     enterParcelEditDisplayMode();
+    select.setActive(false);
     const draw = new Draw({ source: analysisSource, type: "LineString" });
     draw.on("drawend", (event) => {
+      select.setActive(true);
       const selected = select.getFeatures().item(0);
       if (!selected) {
         callbacks.onToast?.("Select one parcel before split");
         analysisSource.clear();
         return;
       }
-      const parcelGeo = format.writeFeatureObject(selected, {
+      const parcelGeoRaw = format.writeFeatureObject(selected, {
         featureProjection: "EPSG:3857",
         dataProjection: "EPSG:4326",
-      }) as GeoJSON.Feature<GeoJSON.Polygon>;
+      }) as GeoJSON.Feature;
+      const parcelPoly = parcelPolygonForSplit(parcelGeoRaw);
       const lineGeo = format.writeFeatureObject(event.feature, {
         featureProjection: "EPSG:3857",
         dataProjection: "EPSG:4326",
       }) as GeoJSON.Feature<GeoJSON.LineString>;
-      const splitResult = splitPolygonByLine(parcelGeo, lineGeo.geometry.coordinates as [number, number][]);
-      if (!splitResult) {
-        callbacks.onToast?.("Split failed: line not crossing polygon");
+      if (!parcelPoly) {
+        callbacks.onToast?.("Split failed: unsupported parcel geometry");
         analysisSource.clear();
         return;
       }
 
+      const extendedLine = extendCutLineAcrossPolygon(lineGeo);
+      const splitPieces = turfSplitByLine(parcelPoly, extendedLine);
+      if (!splitPieces || splitPieces.length < 2) {
+        callbacks.onToast?.("Split failed: line must cross the parcel boundary");
+        analysisSource.clear();
+        return;
+      }
+
+      const parcelGeo = parcelPoly;
       const sourceId = String(selected.get("id"));
       const sourceSurveyNo = String(selected.get("surveyNo") || sourceId);
       parcelSource.removeFeature(selected);
       select.getFeatures().clear();
 
-      splitResult.forEach((polygon, index) => {
+      splitPieces.slice(0, 2).forEach((polygon, index) => {
         const suffix = index === 0 ? "A" : "B";
         const feature = format.readFeature(polygon, {
           dataProjection: "EPSG:4326",
@@ -1552,13 +1574,14 @@ export function createMapEngine(
         feature.set("areaSqM", Math.round((feature.getGeometry() as Polygon | null)?.getArea() ?? 0));
         feature.set("selected", index === 0);
         normalizeOlParcelGeometry(feature);
+        markParcelDirty(feature);
         parcelSource.addFeature(feature);
         if (index === 0) select.getFeatures().push(feature);
       });
       analysisSource.clear();
       syncParcelBoundariesFromParcels();
       syncVarianceFromParcels();
-      callbacks.onToast?.("Parcel split completed");
+      callbacks.onToast?.("Parcel split completed — right-click to send for approval");
     });
     map.addInteraction(draw);
     activeInteractions.push(draw);
@@ -1651,14 +1674,24 @@ export function createMapEngine(
     return { ok: true };
   }
 
-  function highlightParcels(ids: string[], options?: { colorByVariance?: boolean }) {
-    select.getFeatures().clear();
+  function highlightParcels(
+    ids: string[],
+    options?: { colorByVariance?: boolean; areaSelect?: boolean },
+  ) {
+    const areaSelect = options?.areaSelect ?? false;
+    if (!areaSelect) {
+      select.getFeatures().clear();
+    }
     const idSet = new Set(ids.map(String));
     const colorByVariance = options?.colorByVariance ?? false;
     parcelSource.getFeatures().forEach((feature) => {
       const isMatch = idSet.has(String(feature.get("id")));
-      feature.set("selected", isMatch);
-      feature.set("varianceHighlight", isMatch && colorByVariance);
+      if (areaSelect) {
+        feature.set("areaHighlight", isMatch);
+      } else {
+        feature.set("selected", isMatch);
+        feature.set("varianceHighlight", isMatch && colorByVariance);
+      }
     });
     refreshStyledLayers();
 
@@ -1686,11 +1719,42 @@ export function createMapEngine(
     }
   }
 
+  function clearAreaSelection() {
+    parcelSource.getFeatures().forEach((feature) => {
+      feature.set("areaHighlight", false);
+    });
+    refreshStyledLayers();
+  }
+
+  function hasAreaSelection() {
+    return parcelSource.getFeatures().some((feature) => Boolean(feature.get("areaHighlight")));
+  }
+
+  function getSelectedParcelCount() {
+    return select.getFeatures().getLength();
+  }
+
+  function clearOverlayHighlights() {
+    hoveredParcelId = null;
+    const selectedIds = new Set(select.getFeatures().getArray().map((feature) => String(feature.get("id"))));
+    parcelSource.getFeatures().forEach((feature) => {
+      const id = String(feature.get("id"));
+      if (!selectedIds.has(id)) {
+        feature.set("selected", false);
+      }
+      feature.set("areaHighlight", false);
+      feature.set("varianceHighlight", false);
+      feature.set("hovered", false);
+    });
+    refreshStyledLayers();
+  }
+
   function clearHighlights() {
     select.getFeatures().clear();
     hoveredParcelId = null;
     parcelSource.getFeatures().forEach((feature) => {
       feature.set("selected", false);
+      feature.set("areaHighlight", false);
       feature.set("varianceHighlight", false);
       feature.set("hovered", false);
     });
@@ -1744,8 +1808,16 @@ export function createMapEngine(
       if (tool === "measure-distance") startMeasureDistance();
       if (tool === "buffer") startBuffer();
       if (tool === "amalgamate") {
-        const result = runAmalgamation();
-        if (!result.ok && result.reason) callbacks.onToast?.(result.reason);
+        clearInteractions();
+        const runMerge = () => {
+          const result = runAmalgamation();
+          if (!result.ok && result.reason) callbacks.onToast?.(result.reason);
+        };
+        if (select.getFeatures().getLength() < 2) {
+          requireParcelSelection(2, runMerge, "Select two adjacent parcels to merge");
+          return;
+        }
+        runMerge();
         return;
       }
     },
@@ -1755,8 +1827,14 @@ export function createMapEngine(
     resetTools,
     highlightParcels,
     clearHighlights,
+    clearOverlayHighlights,
+    clearAreaSelection,
+    hasAreaSelection,
+    getSelectedParcelCount,
+    abortActiveDrawing,
     clearInteractions,
     dispose: () => {
+      clearPendingMutationHandler();
       clearInteractions();
       map.setTarget(undefined);
     },

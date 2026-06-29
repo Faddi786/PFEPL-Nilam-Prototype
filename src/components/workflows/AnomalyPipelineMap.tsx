@@ -69,6 +69,8 @@ type Props = {
   bandFilter?: VarianceBand | null;
   highlightedParcelIndex?: number | null;
   className?: string;
+  /** When set, use FMB workflow parcels instead of workbench demo cluster. */
+  parcels?: GeoJSON.Feature<GeoJSON.Polygon>[];
 };
 
 export default function AnomalyPipelineMap({
@@ -77,6 +79,7 @@ export default function AnomalyPipelineMap({
   bandFilter = null,
   highlightedParcelIndex = null,
   className,
+  parcels: parcelsOverride,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
@@ -89,9 +92,13 @@ export default function AnomalyPipelineMap({
   const varianceSourceRef = useRef<VectorSource | null>(null);
   const contextLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
 
-  const [demoParcels, setDemoParcels] = useState(() => pickDemoParcels());
+  const [demoParcels, setDemoParcels] = useState(() => parcelsOverride ?? pickDemoParcels());
 
   useEffect(() => {
+    if (parcelsOverride) {
+      setDemoParcels(parcelsOverride);
+      return;
+    }
     let cancelled = false;
     loadWorkbenchRegionDataset(DEFAULT_REGION_KEY).then((dataset) => {
       if (!cancelled) setDemoParcels(pickDemoParcels(dataset));
@@ -99,7 +106,7 @@ export default function AnomalyPipelineMap({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [parcelsOverride]);
 
   phaseRef.current = phase;
   bandOpacityRef.current = bandOpacity;
@@ -263,17 +270,17 @@ export default function AnomalyPipelineMap({
 
     const map = new Map({
       target: containerRef.current,
-      controls: defaultControls({ zoom: false, attribution: false }),
+      controls: defaultControls({ zoom: true, attribution: false }),
       layers: [imagery, contextLayer, digitizedLayer, varianceLayer],
-      view: new View({ zoom: 17, maxZoom: MAP_MAX_ZOOM, minZoom: 14 }),
+      view: new View({ zoom: 16, maxZoom: MAP_MAX_ZOOM, minZoom: 12 }),
     });
 
     const extent = contextSource.getExtent();
     if (extent) {
-      map.getView().fit(extent, { padding: [14, 14, 14, 14], duration: 0, maxZoom: MAP_MAX_ZOOM });
+      map.getView().fit(extent, { padding: [36, 36, 36, 36], duration: 0, maxZoom: MAP_MAX_ZOOM });
       const zoom = map.getView().getZoom();
       if (zoom !== undefined) {
-        map.getView().setZoom(Math.min(MAP_MAX_ZOOM, zoom * 1.05));
+        map.getView().setZoom(Math.max(12, zoom * 0.88));
       }
     }
 

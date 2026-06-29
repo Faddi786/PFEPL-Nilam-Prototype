@@ -249,7 +249,8 @@ export default function FmbAutomationPage() {
                 selectedEdgeId={selectedEdgeId}
                 onSelectVertex={setSelectedVertexId}
                 onSelectEdge={setSelectedEdgeId}
-                extractionVisible={phase !== "upload"}
+                imageVisible={phase !== "upload"}
+                geometryVisible={phase !== "upload"}
               />
             </div>
           </div>

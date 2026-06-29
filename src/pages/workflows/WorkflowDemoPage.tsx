@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCheck, CircleAlert, Clock3, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCheck, CheckCircle2, CircleAlert, Clock3, Loader2, ScanLine, Upload } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import WorkflowPageHeader from "../../components/WorkflowPageHeader";
 import WorkflowStepper from "../../components/WorkflowStepper";
@@ -10,7 +10,9 @@ import GeoreferencingMap from "../../components/workflows/GeoreferencingMap";
 import AnomalyPipelineFlow from "../../components/workflows/AnomalyPipelineFlow";
 import AutocadWorkflowFlow from "../../components/workflows/AutocadWorkflowFlow";
 import AutocadStepSwitcher from "../../components/workflows/AutocadStepSwitcher";
-import ParcelCreationManagementFlow from "../../components/workflows/ParcelCreationManagementFlow";
+import ParcelCreationManagementFlow, {
+  type ParcelWorkflowNavState,
+} from "../../components/workflows/ParcelCreationManagementFlow";
 import UlpinSplitDiagram from "../../components/workflows/UlpinSplitDiagram";
 import { DEFAULT_REGION_KEY } from "../../data/mockData";
 import { getWorkbenchRegionDatasetSync } from "../../data/workbenchParcels";
@@ -482,6 +484,7 @@ export default function WorkflowDemoPage() {
   const { id } = useParams<{ id: WorkflowId }>();
   const visibleWorkflows = useMemo(() => getVisiblePanelWorkflows(), []);
   const [autocadStep, setAutocadStep] = useState(0);
+  const [parcelNav, setParcelNav] = useState<ParcelWorkflowNavState | null>(null);
 
   const workflow = useMemo(() => {
     if (!id) return null;
@@ -490,6 +493,7 @@ export default function WorkflowDemoPage() {
 
   useEffect(() => {
     setAutocadStep(0);
+    setParcelNav(null);
   }, [workflow?.id]);
 
   if (!workflow) {
@@ -508,28 +512,131 @@ export default function WorkflowDemoPage() {
   const hideHeaderCopy =
     workflow.id === "online-mutation" ||
     workflow.id === "autocad" ||
-    workflow.id === "parcel-creation-management";
+    (workflow.id === "parcel-creation-management" && !parcelNav?.pageTitle);
+
+  const parcelHeaderTitle =
+    workflow.id === "parcel-creation-management" && parcelNav?.pageTitle
+      ? parcelNav.pageTitle
+      : hideHeaderCopy
+        ? ""
+        : workflow.title;
+
+  const parcelHeaderDescription =
+    workflow.id === "parcel-creation-management" && parcelNav?.pageDescription
+      ? parcelNav.pageDescription
+      : hideHeaderCopy
+        ? undefined
+        : workflow.description;
 
   return (
-    <div className="h-full overflow-y-auto bg-[#F7F7F5] p-4 pb-8 lg:p-5">
-      <div className="mx-auto flex max-w-[1450px] flex-col gap-4">
-        <section className="rounded-2xl border border-white/70 bg-white/85 p-4 shadow-[0_8px_30px_rgba(0,0,0,0.06)] backdrop-blur-sm">
-          <div className="mb-4">
+    <div
+      className={
+        workflow.id === "parcel-creation-management"
+          ? "flex h-screen flex-col overflow-hidden bg-[#F7F7F5] p-3 lg:p-4"
+          : "h-full overflow-y-auto bg-[#F7F7F5] p-4 pb-8 lg:p-5"
+      }
+    >
+      <div
+        className={`mx-auto flex w-full flex-col ${
+          workflow.id === "parcel-creation-management" ? "min-h-0 flex-1 gap-2" : "max-w-[1450px] gap-4"
+        }`}
+      >
+        <section
+          className={`rounded-2xl border border-white/70 bg-white/85 shadow-[0_8px_30px_rgba(0,0,0,0.06)] backdrop-blur-sm ${
+            workflow.id === "parcel-creation-management"
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden p-3 lg:p-4"
+              : "p-4"
+          }`}
+        >
+          <div className={workflow.id === "parcel-creation-management" ? "mb-2 shrink-0" : "mb-4"}>
             <WorkflowPageHeader
-              title={hideHeaderCopy ? "" : workflow.title}
-              description={hideHeaderCopy ? undefined : workflow.description}
+              title={parcelHeaderTitle}
+              description={parcelHeaderDescription}
               currentWorkflowId={workflow.id}
               workflows={visibleWorkflows}
               headerActions={
-                workflow.id === "autocad" ? (
+                workflow.id === "parcel-creation-management" ? (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {parcelNav ? (
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1.5 text-[10px] font-medium leading-none text-slate-600">
+                        {parcelNav.phaseLabel} · {parcelNav.phase + 1}/{parcelNav.phaseCount}
+                      </span>
+                    ) : null}
+                    {parcelNav?.canGoBack ? (
+                      <button
+                        type="button"
+                        onClick={() => parcelNav.goBack()}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                      >
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                        Previous
+                      </button>
+                    ) : null}
+                    {parcelNav?.fmbDemo && parcelNav.phase === 0 ? (
+                      <>
+                        {parcelNav.fmbDemo.canUpload ? (
+                          <button
+                            type="button"
+                            onClick={() => parcelNav.fmbDemo?.onUpload()}
+                            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3.5 text-xs font-medium text-sky-800 shadow-sm transition hover:bg-sky-100"
+                          >
+                            <Upload className="h-3.5 w-3.5" />
+                            Upload document
+                          </button>
+                        ) : null}
+                        {parcelNav.fmbDemo.phase !== "idle" ? (
+                          <button
+                            type="button"
+                            onClick={() => parcelNav.fmbDemo?.onDigitize()}
+                            disabled={!parcelNav.fmbDemo.canDigitize || parcelNav.fmbDemo.isDigitizing}
+                            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-sky-600 px-3.5 text-xs font-medium text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {parcelNav.fmbDemo.isDigitizing ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <ScanLine className="h-3.5 w-3.5" />
+                            )}
+                            {parcelNav.fmbDemo.isDigitizing ? "Digitizing…" : "Digitize"}
+                          </button>
+                        ) : null}
+                        {parcelNav.fmbDemo.showAccept ? (
+                          <button
+                            type="button"
+                            onClick={() => parcelNav.fmbDemo?.onAccept()}
+                            disabled={parcelNav.fmbDemo.acceptDisabled}
+                            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-emerald-600 px-3.5 text-xs font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-40"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            {parcelNav.fmbDemo.acceptLabel}
+                          </button>
+                        ) : null}
+                      </>
+                    ) : null}
+                    {parcelNav?.canGoNext ? (
+                      <button
+                        type="button"
+                        onClick={() => parcelNav.goNext()}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#1A1A1A] px-3.5 text-xs font-medium text-white shadow-sm transition hover:bg-slate-800"
+                      >
+                        {parcelNav?.nextLabel ?? "Next"}
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
+                  </div>
+                ) : workflow.id === "autocad" ? (
                   <AutocadStepSwitcher step={autocadStep} onStepChange={setAutocadStep} />
                 ) : undefined
               }
             />
           </div>
 
-          <div key={workflow.id}>
-            {workflow.id === "parcel-creation-management" ? <ParcelCreationManagementFlow /> : null}
+          <div
+            key={workflow.id}
+            className={workflow.id === "parcel-creation-management" ? "min-h-0 flex-1 overflow-hidden" : undefined}
+          >
+            {workflow.id === "parcel-creation-management" ? (
+              <ParcelCreationManagementFlow onNavStateChange={setParcelNav} />
+            ) : null}
             {workflow.id === "online-mutation" ? <OnlineMutationFlow /> : null}
             {workflow.id === "georeferencing" ? <GeoreferencingFlow /> : null}
             {workflow.id === "anomaly-pipeline" ? <AnomalyPipelineFlow /> : null}

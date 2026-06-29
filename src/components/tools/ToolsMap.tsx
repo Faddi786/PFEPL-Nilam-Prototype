@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createMapEngine } from "../../lib/mapEngine";
 import {
   disposeToolsPageEngine,
+  handleToolsEscape,
   handleToolsMapClick,
   type ToolsEngineCallbacks,
 } from "../../lib/toolsPageEngine";
@@ -9,6 +10,7 @@ import {
   getWorkbenchRegionDatasetSync,
   loadWorkbenchRegionDataset,
 } from "../../data/workbenchParcels";
+import { syncCadastralSpatialDataset } from "../../data/cadastralSpatialData";
 import type { ParcelRecord, RegionDataset, RegionKey } from "../../data/mockData";
 import type { TransformMethod } from "../../data/transformationMock";
 
@@ -48,20 +50,31 @@ type ParcelContextMenuState = {
 type Props = {
   regionKey?: RegionKey;
   activeTransform?: TransformMethod | null;
+  activeMeasurement?: "distance" | "draw-polygon" | null;
+  activeMutation?: "split" | "merge" | "vertex-edit" | null;
   onEngineReady?: (engine: ToolsMapHandle) => void;
   onToast?: ToolsEngineCallbacks["onToast"];
+  onParcelSelect?: ToolsEngineCallbacks["onParcelSelect"];
+  onDatasetChange?: (dataset: RegionDataset) => void;
 };
 
 export default function ToolsMap({
   regionKey = "karaikal",
   activeTransform,
+  activeMeasurement = null,
+  activeMutation = null,
   onEngineReady,
   onToast,
+  onParcelSelect,
+  onDatasetChange,
 }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<ToolsMapHandle | null>(null);
   const activeTransformRef = useRef(activeTransform);
+  const activeMeasurementRef = useRef(activeMeasurement);
+  const activeMutationRef = useRef(activeMutation);
   const onToastRef = useRef(onToast);
+  const onParcelSelectRef = useRef(onParcelSelect);
   const [regionDataset, setRegionDataset] = useState<RegionDataset>(() =>
     getWorkbenchRegionDatasetSync(regionKey),
   );
@@ -72,8 +85,20 @@ export default function ToolsMap({
   }, [activeTransform]);
 
   useEffect(() => {
+    activeMeasurementRef.current = activeMeasurement;
+  }, [activeMeasurement]);
+
+  useEffect(() => {
+    activeMutationRef.current = activeMutation;
+  }, [activeMutation]);
+
+  useEffect(() => {
     onToastRef.current = onToast;
   }, [onToast]);
+
+  useEffect(() => {
+    onParcelSelectRef.current = onParcelSelect;
+  }, [onParcelSelect]);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,7 +126,7 @@ export default function ToolsMap({
             pixel: [position.pixel[0], position.pixel[1]],
           });
         },
-        onMapClick: (pixel, hasParcel) => {
+        onMapClick: (pixel, hasParcel, modifiers) => {
           const currentEngine = engineRef.current;
           if (!currentEngine) return;
 
@@ -111,12 +136,18 @@ export default function ToolsMap({
             mapCoord,
             activeTransformRef.current,
             { onToast: onToastRef.current },
+            { shiftKey: modifiers?.shiftKey },
           );
           if (handled) return;
 
           if (!hasParcel) {
             setContextMenu(null);
           }
+        },
+        onSelectionChange: () => {
+          const currentEngine = engineRef.current;
+          if (!currentEngine) return;
+          onParcelSelectRef.current?.(currentEngine.getSelectedParcelCount(), []);
         },
       },
       { cadastralOnly: true },
@@ -150,7 +181,9 @@ export default function ToolsMap({
     if (!engineRef.current) return;
     const engine = engineRef.current;
     engine.setDataset(regionDataset);
-  }, [regionDataset]);
+    syncCadastralSpatialDataset(regionDataset);
+    onDatasetChange?.(regionDataset);
+  }, [regionDataset, onDatasetChange]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -159,6 +192,21 @@ export default function ToolsMap({
       const tag = target?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       setContextMenu(null);
+
+      const engine = engineRef.current;
+      if (!engine) return;
+
+      handleToolsEscape(
+        engine,
+        {
+          activeMeasurement: activeMeasurementRef.current,
+          activeMutation: activeMutationRef.current,
+        },
+        {
+          onToast: onToastRef.current,
+          onParcelSelect: onParcelSelectRef.current,
+        },
+      );
     }
 
     window.addEventListener("keydown", onKeyDown);
@@ -171,27 +219,9 @@ export default function ToolsMap({
     if (submitted) setContextMenu(null);
   }
 
-  const transformLabel =
-    activeTransform && activeTransform !== "overview"
-      ? {
-          affine: "Affine transform active",
-          polynomial: "Polynomial transform active",
-          tps: "Thin Plate Spline active",
-          projective: "Projective transform active",
-        }[activeTransform]
-      : null;
-
   return (
     <div className="relative z-0 h-full w-full">
       <div ref={mapRef} className="h-full w-full" />
-
-      {transformLabel && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center px-4">
-          <div className="rounded-xl border border-white/80 bg-white/90 px-4 py-2 text-sm font-medium text-slate-700 shadow-lg backdrop-blur-md">
-            {transformLabel} — click map to preview GCP placement (demo)
-          </div>
-        </div>
-      )}
 
       {contextMenu ? (
         <div

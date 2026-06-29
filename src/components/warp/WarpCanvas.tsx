@@ -1,8 +1,20 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import CanvasZoomControls from "../ui/CanvasZoomControls";
 import {
+  SVG_WHEEL_DELTA_THRESHOLD_FINE,
+  SVG_ZOOM_STEP_FINE,
+  useSvgCanvasZoom,
+} from "../../hooks/useSvgCanvasZoom";
+import {
+  applySliderTransform,
   computeRmsError,
+  esriWorldImageryTileUrl,
   FMB_INNER_PARCELS,
   FMB_MESH_VERTICES,
+  GDAL_PANEL_DEFAULTS,
+  gcpCentroid,
+  lngLatToTile,
+  WARP_SATELLITE,
   type GcpAnchor,
   type TransformMode,
 } from "../../data/warpMock";
@@ -12,39 +24,49 @@ type WarpCanvasProps = {
   onGcpsChange: (gcps: GcpAnchor[]) => void;
   mode: TransformMode;
   warped: boolean;
+  /** When set, use FMB-extracted mesh instead of default demo polygon. */
+  meshVertices?: [number, number][];
+  innerParcels?: [number, number][][];
+  stretch?: number;
+  rotateDeg?: number;
+  offsetX?: number;
+  offsetY?: number;
+  /** Live preview even before gdalwarp completes. */
+  livePreview?: boolean;
 };
 
 function idwWarp(
   point: [number, number],
   gcps: GcpAnchor[],
   mode: TransformMode,
+  strength = 1,
 ): [number, number] {
   const [x, y] = point;
   if (mode === "translation") {
     const avgDx = gcps.reduce((s, g) => s + (g.drone[0] - g.fmb[0]), 0) / gcps.length;
     const avgDy = gcps.reduce((s, g) => s + (g.drone[1] - g.fmb[1]), 0) / gcps.length;
-    return [x + avgDx * 0.85, y + avgDy * 0.85];
+    return [x + avgDx * 0.85 * strength, y + avgDy * 0.85 * strength];
   }
   if (mode === "rotation") {
     const cx = gcps.reduce((s, g) => s + g.fmb[0], 0) / gcps.length;
     const cy = gcps.reduce((s, g) => s + g.fmb[1], 0) / gcps.length;
-    const angle = -0.035;
+    const angle = -0.035 * strength;
     const dx = x - cx;
     const dy = y - cy;
     const avgDx = gcps.reduce((s, g) => s + (g.drone[0] - g.fmb[0]), 0) / gcps.length;
     const avgDy = gcps.reduce((s, g) => s + (g.drone[1] - g.fmb[1]), 0) / gcps.length;
     return [
-      cx + dx * Math.cos(angle) - dy * Math.sin(angle) + avgDx * 0.5,
-      cy + dx * Math.sin(angle) + dy * Math.cos(angle) + avgDy * 0.5,
+      cx + dx * Math.cos(angle) - dy * Math.sin(angle) + avgDx * 0.5 * strength,
+      cy + dx * Math.sin(angle) + dy * Math.cos(angle) + avgDy * 0.5 * strength,
     ];
   }
   if (mode === "scale") {
     const cx = 50;
     const cy = 50;
-    const scale = 1.04;
+    const scale = 1 + 0.04 * strength;
     const avgDx = gcps.reduce((s, g) => s + (g.drone[0] - g.fmb[0]), 0) / gcps.length;
     const avgDy = gcps.reduce((s, g) => s + (g.drone[1] - g.fmb[1]), 0) / gcps.length;
-    return [cx + (x - cx) * scale + avgDx * 0.4, cy + (y - cy) * scale + avgDy * 0.4];
+    return [cx + (x - cx) * scale + avgDx * 0.4 * strength, cy + (y - cy) * scale + avgDy * 0.4 * strength];
   }
 
   let sumW = 0;
@@ -57,7 +79,7 @@ function idwWarp(
     offY += (gcp.drone[1] - gcp.fmb[1]) * w;
     sumW += w;
   }
-  return [x + offX / sumW, y + offY / sumW];
+  return [x + (offX / sumW) * strength, y + (offY / sumW) * strength];
 }
 
 function toPoints(vertices: [number, number][]) {
@@ -70,21 +92,88 @@ function GcpIcon({ icon }: { icon: GcpAnchor["icon"] }) {
   return <text fontSize="3.5" textAnchor="middle">⊕</text>;
 }
 
-export default function WarpCanvas({ gcps, onGcpsChange, mode, warped }: WarpCanvasProps) {
+function SatelliteBasemap() {
+  const { center, zoom } = WARP_SATELLITE;
+  const centerTile = lngLatToTile(center[0], center[1], zoom);
+  const tiles = useMemo(() => {
+    const grid: { x: number; y: number; px: number; py: number }[] = [];
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        grid.push({
+          x: centerTile.x + dx,
+          y: centerTile.y + dy,
+          px: (dx + 1) * 33.33,
+          py: (dy + 1) * 33.33,
+        });
+      }
+    }
+    return grid;
+  }, [centerTile.x, centerTile.y]);
+
+  return (
+    <g>
+      {tiles.map((tile) => (
+        <image
+          key={`${tile.x}-${tile.y}`}
+          href={esriWorldImageryTileUrl(zoom, tile.x, tile.y)}
+          x={tile.px}
+          y={tile.py}
+          width={33.34}
+          height={33.34}
+          preserveAspectRatio="none"
+          crossOrigin="anonymous"
+        />
+      ))}
+      <rect data-pan-background="true" width="100" height="100" fill="rgba(0,0,0,0.08)" />
+    </g>
+  );
+}
+
+export default function WarpCanvas({
+  gcps,
+  onGcpsChange,
+  mode,
+  warped,
+  meshVertices: meshOverride,
+  innerParcels: innerOverride,
+  stretch = GDAL_PANEL_DEFAULTS.stretch,
+  rotateDeg = GDAL_PANEL_DEFAULTS.rotateDeg,
+  offsetX = GDAL_PANEL_DEFAULTS.offsetX,
+  offsetY = GDAL_PANEL_DEFAULTS.offsetY,
+  livePreview = false,
+}: WarpCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
-  const mesh = useMemo(() => {
-    if (!warped) return FMB_MESH_VERTICES;
-    return FMB_MESH_VERTICES.map((v) => idwWarp(v, gcps, mode));
-  }, [gcps, mode, warped]);
+  const baseMesh = meshOverride ?? FMB_MESH_VERTICES;
+  const baseInner = innerOverride ?? FMB_INNER_PARCELS;
+  const centroid = useMemo(() => gcpCentroid(gcps), [gcps]);
+  const warpStrength = warped ? 1 : livePreview ? 0.72 : 0;
 
-  const innerParcels = useMemo(() => {
-    if (!warped) return FMB_INNER_PARCELS;
-    return FMB_INNER_PARCELS.map((ring) => ring.map((v) => idwWarp(v, gcps, mode)));
-  }, [gcps, mode, warped]);
+  const transformPoint = useCallback(
+    (point: [number, number]): [number, number] => {
+      let p: [number, number] =
+        warpStrength > 0 ? idwWarp(point, gcps, mode, warpStrength) : [...point];
+      p = applySliderTransform(p, stretch, rotateDeg, offsetX, offsetY, centroid);
+      return p;
+    },
+    [gcps, mode, warpStrength, stretch, rotateDeg, offsetX, offsetY, centroid],
+  );
 
-  const rms = useMemo(() => computeRmsError(gcps, warped ? mode : "translation"), [gcps, mode, warped]);
+  const mesh = useMemo(
+    () => baseMesh.map((v) => transformPoint(v)),
+    [baseMesh, transformPoint],
+  );
+
+  const innerParcels = useMemo(
+    () => baseInner.map((ring) => ring.map((v) => transformPoint(v))),
+    [baseInner, transformPoint],
+  );
+
+  const rms = useMemo(
+    () => computeRmsError(gcps, warped || livePreview ? mode : "translation"),
+    [gcps, mode, warped, livePreview],
+  );
 
   const clientToSvg = useCallback((clientX: number, clientY: number): [number, number] | null => {
     const svg = svgRef.current;
@@ -100,6 +189,7 @@ export default function WarpCanvas({ gcps, onGcpsChange, mode, warped }: WarpCan
 
   const handlePointerDown = (id: string) => (e: React.PointerEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setDraggingId(id);
     (e.target as Element).setPointerCapture(e.pointerId);
   };
@@ -112,72 +202,104 @@ export default function WarpCanvas({ gcps, onGcpsChange, mode, warped }: WarpCan
   };
 
   const handlePointerUp = () => setDraggingId(null);
+  const {
+    viewBox,
+    zoom,
+    zoomIn,
+    zoomOut,
+    resetZoom,
+    wheelTargetRef,
+    isPanning,
+    spacePanActive,
+    onPanMouseDown,
+    onPanMouseMove,
+    onPanMouseUp,
+  } = useSvgCanvasZoom(100, 100, {
+    defaultZoom: 0.65,
+    zoomStep: SVG_ZOOM_STEP_FINE,
+    wheelDeltaThreshold: SVG_WHEEL_DELTA_THRESHOLD_FINE,
+  });
+
+  const canvasCursor =
+    draggingId || isPanning ? "cursor-grabbing" : spacePanActive ? "cursor-grab" : "cursor-grab";
 
   return (
-    <div className="relative h-full min-h-[320px] w-full">
+    <div
+      ref={wheelTargetRef}
+      className="relative flex h-full max-h-full min-h-0 w-full items-center justify-center overflow-hidden"
+      onMouseDown={onPanMouseDown}
+      onMouseMove={onPanMouseMove}
+      onMouseUp={onPanMouseUp}
+      onMouseLeave={onPanMouseUp}
+    >
+      <CanvasZoomControls
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onReset={resetZoom}
+        zoom={zoom}
+        variant="dark"
+      />
       <svg
         ref={svgRef}
-        viewBox="0 0 100 100"
-        className="h-full w-full touch-none select-none rounded-xl"
+        viewBox={viewBox}
+        preserveAspectRatio="xMidYMid meet"
+        className={`h-full max-h-full w-full max-w-full touch-none select-none rounded-xl ${canvasCursor}`}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       >
-        <defs>
-          <pattern id="drone-grid" width="4" height="4" patternUnits="userSpaceOnUse">
-            <rect width="4" height="4" fill="#1a3d2e" />
-            <rect width="2" height="2" fill="#234d38" />
-          </pattern>
-          <pattern id="fmb-paper" width="6" height="6" patternUnits="userSpaceOnUse">
-            <rect width="6" height="6" fill="#faf8f3" />
-            <path d="M0 6 L6 0" stroke="#e8e0d0" strokeWidth="0.15" />
-          </pattern>
-        </defs>
+        <rect data-pan-background="true" width="100" height="100" fill="transparent" />
+        <SatelliteBasemap />
 
-        <rect width="100" height="100" fill="url(#drone-grid)" rx="1" />
-        <ellipse cx="35" cy="40" rx="18" ry="12" fill="#2d5a3d" opacity="0.5" />
-        <ellipse cx="65" cy="55" rx="22" ry="14" fill="#3d6b4a" opacity="0.45" />
-        <path d="M0 52 Q30 48 55 54 T100 50" fill="none" stroke="#4a90c2" strokeWidth="0.6" opacity="0.7" />
-        <text x="50" y="6" fill="#a7f3d0" fontSize="2.8" textAnchor="middle" opacity="0.85">
-          Drone Orthomosaic — Khutal DGPS 2025
+        <text
+          x="50"
+          y="5.5"
+          fill="#ffffff"
+          fontSize="2.6"
+          textAnchor="middle"
+          opacity="0.92"
+          pointerEvents="none"
+        >
+          Drone Orthomosaic — Thirunallar DGPS 2025
         </text>
 
-        <polygon
-          points="30,34 44,32 48,46 34,48"
-          fill="none"
-          stroke="#86efac"
-          strokeWidth="0.5"
-          strokeDasharray="1 0.5"
-          opacity="0.7"
-        />
-        <polygon
-          points="52,36 64,34 68,50 56,52"
-          fill="none"
-          stroke="#86efac"
-          strokeWidth="0.5"
-          strokeDasharray="1 0.5"
-          opacity="0.7"
-        />
-
-        <g opacity={warped ? 0.92 : 0.75}>
-          <polygon points={toPoints(mesh)} fill="url(#fmb-paper)" stroke="#b45309" strokeWidth="0.7" />
+        <g opacity={warped ? 0.94 : livePreview ? 0.88 : 0.82} pointerEvents="none">
+          <polygon
+            points={toPoints(mesh)}
+            fill="rgba(255,248,235,0.22)"
+            stroke="#fbbf24"
+            strokeWidth="0.55"
+          />
           {innerParcels.map((ring, i) => (
-            <polygon key={i} points={toPoints(ring)} fill="none" stroke="#78716c" strokeWidth="0.45" />
+            <polygon
+              key={i}
+              points={toPoints(ring)}
+              fill="rgba(251,191,36,0.08)"
+              stroke="#fde68a"
+              strokeWidth="0.4"
+            />
           ))}
         </g>
 
         {gcps.map((gcp) => (
-          <g key={gcp.id}>
+          <g key={gcp.id} pointerEvents="none">
             <line
-              x1={gcp.fmb[0]}
-              y1={gcp.fmb[1]}
+              x1={transformPoint(gcp.fmb)[0]}
+              y1={transformPoint(gcp.fmb)[1]}
               x2={gcp.drone[0]}
               y2={gcp.drone[1]}
-              stroke={warped ? "#38bdf8" : "#f97316"}
+              stroke={warped || livePreview ? "#38bdf8" : "#f97316"}
               strokeWidth="0.35"
               strokeDasharray="0.8 0.4"
             />
-            <circle cx={gcp.fmb[0]} cy={gcp.fmb[1]} r="1.8" fill="#dc2626" stroke="#fff" strokeWidth="0.3" />
+            <circle
+              cx={transformPoint(gcp.fmb)[0]}
+              cy={transformPoint(gcp.fmb)[1]}
+              r="1.8"
+              fill="#dc2626"
+              stroke="#fff"
+              strokeWidth="0.3"
+            />
             <circle
               cx={gcp.drone[0]}
               cy={gcp.drone[1]}
@@ -186,9 +308,11 @@ export default function WarpCanvas({ gcps, onGcpsChange, mode, warped }: WarpCan
               stroke="#fff"
               strokeWidth="0.35"
               className="cursor-grab"
+              pointerEvents="all"
+              data-canvas-interactive
               onPointerDown={handlePointerDown(gcp.id)}
             />
-            <g transform={`translate(${gcp.drone[0]}, ${gcp.drone[1] - 3.5})`}>
+            <g transform={`translate(${gcp.drone[0]}, ${gcp.drone[1] - 3.5})`} pointerEvents="none">
               <GcpIcon icon={gcp.icon} />
             </g>
           </g>
@@ -197,7 +321,7 @@ export default function WarpCanvas({ gcps, onGcpsChange, mode, warped }: WarpCan
 
       <div className="absolute bottom-3 left-3 rounded-lg border border-white/20 bg-black/50 px-2.5 py-1.5 text-[10px] text-white backdrop-blur-sm">
         <span className="font-semibold text-sky-300">RMS residual:</span>{" "}
-        {warped ? `${rms.toFixed(2)} m` : `${(rms * 4.2).toFixed(2)} m (pre-warp)`}
+        {warped || livePreview ? `${rms.toFixed(2)} m` : `${(rms * 4.2).toFixed(2)} m (pre-warp)`}
       </div>
       <div className="absolute bottom-3 right-3 flex gap-2 text-[9px] text-white/80">
         <span className="flex items-center gap-1">

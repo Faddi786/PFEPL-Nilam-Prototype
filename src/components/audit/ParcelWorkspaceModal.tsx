@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BadgeCheck,
+  ChevronLeft,
+  ChevronRight,
   FileText,
   MapPin,
   X,
@@ -19,6 +21,7 @@ import {
   generateNilamagalData,
   generateParcelTimeline,
   type ParcelDocumentAsset,
+  type WorkspaceImageAsset,
   type WorkspaceTab,
 } from "../../data/parcelWorkspaceMock";
 import UlpinLineageTree from "./UlpinLineageTree";
@@ -331,29 +334,158 @@ function UlpinLineagePanel({ parcel }: { parcel: ParcelRecord }) {
   return <UlpinLineageTree parcel={parcel} />;
 }
 
-function ImagesGallery() {
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {WORKSPACE_IMAGE_ASSETS.map((asset) => (
-        <figure
-          key={asset.id}
-          className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+function ImageLightbox({
+  assets,
+  index,
+  onClose,
+  onNavigate,
+}: {
+  assets: WorkspaceImageAsset[];
+  index: number;
+  onClose: () => void;
+  onNavigate: (nextIndex: number) => void;
+}) {
+  const asset = assets[index];
+  const total = assets.length;
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.stopImmediatePropagation();
+        onClose();
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        onNavigate((index - 1 + total) % total);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        onNavigate((index + 1) % total);
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [index, total, onClose, onNavigate]);
+
+  return createPortal(
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      className="fixed inset-0 z-[10003] flex flex-col bg-slate-900/85 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label={asset.label}
+      onClick={onClose}
+    >
+      <div className="flex shrink-0 items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-white">{asset.label}</p>
+          <p className="text-[11px] text-slate-300">
+            {asset.category} · {index + 1} / {assets.length}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onClose();
+          }}
+          aria-label="Close image viewer"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
         >
-          <div className="aspect-video overflow-hidden bg-slate-100">
-            <img
-              src={asset.src}
-              alt={asset.label}
-              className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-              loading="lazy"
-            />
-          </div>
-          <figcaption className="px-3 py-2">
-            <p className="text-[11px] font-medium text-slate-800">{asset.label}</p>
-            <p className="text-[10px] text-slate-500">{asset.category}</p>
-          </figcaption>
-        </figure>
-      ))}
-    </div>
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div
+        className="relative flex min-h-0 flex-1 items-center justify-center px-14 py-4 sm:px-20"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={() => onNavigate((index - 1 + total) % total)}
+          aria-label="Previous image"
+          className="absolute left-3 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white shadow-sm transition hover:bg-white/20 sm:left-6"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+
+        <motion.img
+          key={asset.id}
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.2 }}
+          src={asset.src}
+          alt={asset.label}
+          className="max-h-[calc(100vh-8rem)] max-w-full rounded-lg object-contain shadow-2xl"
+        />
+
+        <button
+          type="button"
+          onClick={() => onNavigate((index + 1) % total)}
+          aria-label="Next image"
+          className="absolute right-3 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white shadow-sm transition hover:bg-white/20 sm:right-6"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="shrink-0 border-t border-white/10 bg-white/5 px-4 py-3 text-center sm:px-6">
+        <p className="text-[11px] text-slate-300">
+          Use ← → arrow keys to navigate · Esc to close
+        </p>
+      </div>
+    </motion.div>,
+    document.body,
+  );
+}
+
+function ImagesGallery() {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {WORKSPACE_IMAGE_ASSETS.map((asset, index) => (
+          <figure
+            key={asset.id}
+            className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+          >
+            <button
+              type="button"
+              onClick={() => setLightboxIndex(index)}
+              className="block w-full cursor-zoom-in text-left"
+              aria-label={`View ${asset.label}`}
+            >
+              <div className="aspect-video overflow-hidden bg-slate-100">
+                <img
+                  src={asset.src}
+                  alt={asset.label}
+                  className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                  loading="lazy"
+                />
+              </div>
+              <figcaption className="px-3 py-2">
+                <p className="text-[11px] font-medium text-slate-800">{asset.label}</p>
+                <p className="text-[10px] text-slate-500">{asset.category}</p>
+              </figcaption>
+            </button>
+          </figure>
+        ))}
+      </div>
+
+      <AnimatePresence>
+        {lightboxIndex !== null ? (
+          <ImageLightbox
+            key="image-lightbox"
+            assets={WORKSPACE_IMAGE_ASSETS}
+            index={lightboxIndex}
+            onClose={() => setLightboxIndex(null)}
+            onNavigate={setLightboxIndex}
+          />
+        ) : null}
+      </AnimatePresence>
+    </>
   );
 }
 

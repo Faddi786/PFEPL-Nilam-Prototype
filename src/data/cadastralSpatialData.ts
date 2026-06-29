@@ -86,8 +86,14 @@ export type ScopeStatistics = {
   chartData: { label: string; value: number; color: string }[];
 };
 
-let cachedDataset: RegionDataset | null = null;
+let activeWorkbenchDataset: RegionDataset | null = null;
 let cachedParcels: CadastralParcel[] | null = null;
+
+/** Bind spatial tools to the same loaded workbench dataset as the map (real GeoJSON). */
+export function syncCadastralSpatialDataset(dataset: RegionDataset): void {
+  activeWorkbenchDataset = dataset;
+  cachedParcels = null;
+}
 
 function ringFromFeature(feature: GeoFeature): [number, number][] {
   const geom = feature.geometry;
@@ -138,10 +144,7 @@ function overlapSeverity(areaSqM: number): OverlapCase["severity"] {
 }
 
 export function getWorkbenchDataset(regionKey: RegionKey = DEFAULT_REGION_KEY): RegionDataset {
-  if (!cachedDataset) {
-    cachedDataset = getWorkbenchRegionDatasetSync(regionKey);
-  }
-  return cachedDataset;
+  return activeWorkbenchDataset ?? getWorkbenchRegionDatasetSync(regionKey);
 }
 
 export function getCadastralParcels(): CadastralParcel[] {
@@ -183,8 +186,6 @@ export function getSpatialContext() {
   };
 }
 
-export const SPATIAL_CONTEXT = getSpatialContext();
-
 export function getSelectedParcelId(): string {
   const parcels = getCadastralParcels();
   return parcels[2]?.id ?? parcels[0]?.id ?? "";
@@ -201,23 +202,41 @@ export function getVillageBoundaryRing(): [number, number][] {
   return bboxRing(turf.bbox(collection) as [number, number, number, number]);
 }
 
-export function getFloodZoneRing(): [number, number][] {
-  const dataset = getWorkbenchDataset();
-  for (const feature of dataset.geojson.waterBodies.features) {
-    if (feature.geometry?.type === "Polygon") {
-      return feature.geometry.coordinates[0] as [number, number][];
-    }
-    if (feature.geometry?.type === "MultiPolygon") {
-      return feature.geometry.coordinates[0][0] as [number, number][];
+function ringFromWaterFeatures(features: GeoFeature[]): [number, number][] {
+  for (const feature of features) {
+    const ring = ringFromFeature(feature);
+    if (ring.length >= 4) return ring;
+  }
+
+  for (const feature of features) {
+    const geom = feature.geometry;
+    if (geom?.type !== "LineString" && geom?.type !== "MultiLineString") continue;
+    try {
+      const buffered = turf.buffer(feature, 35, { units: "meters" });
+      if (buffered?.geometry?.type === "Polygon") {
+        return buffered.geometry.coordinates[0] as [number, number][];
+      }
+    } catch {
+      // try next feature
     }
   }
 
+  return [];
+}
+
+export function getFloodZoneRing(): [number, number][] {
+  const dataset = getWorkbenchDataset();
+  const fromWater = ringFromWaterFeatures(dataset.geojson.waterBodies.features as GeoFeature[]);
+  if (fromWater.length >= 4) return fromWater;
+
   const parcels = getCadastralParcels();
-  if (!parcels.length) return [];
-  const collection = turf.featureCollection(parcels.map((parcel) => turf.polygon([parcel.ring])));
-  const bbox = turf.bbox(collection);
-  const height = bbox[3] - bbox[1];
-  return bboxRing([bbox[0], bbox[1], bbox[2], bbox[1] + height * 0.35]);
+  const wetlandParcels = parcels.filter((parcel) => {
+    const haystack = parcel.classification.toLowerCase();
+    return haystack.includes("nanjai") || haystack.includes("poramboke") || haystack.includes("water");
+  });
+  if (wetlandParcels.length) return parcelUnionRing(wetlandParcels);
+
+  return getVillageBoundaryRing();
 }
 
 export function getViewportExtent(): [number, number][] {
@@ -316,8 +335,6 @@ export function getBufferFeatures(): Record<
     canal: { label: canalLabel, line: canalLine, color: "#0d9488" },
   };
 }
-
-export const BUFFER_FEATURES = getBufferFeatures();
 
 export function buildBufferPolygon(
   featureType: BufferFeatureType,
@@ -637,11 +654,12 @@ export function getStatisticsByScope(): ScopeStatistics[] {
   const villageRecords = Object.values(dataset.parcelAttrs);
   const allRecords = loadAllWorkbenchParcelsSync();
 
+  const context = getSpatialContext();
   return [
-    buildScopeStatistics("village", SPATIAL_CONTEXT.village, villageRecords),
-    buildScopeStatistics("taluk", SPATIAL_CONTEXT.taluk, allRecords),
-    buildScopeStatistics("district", SPATIAL_CONTEXT.district, allRecords),
-    buildScopeStatistics("ut", SPATIAL_CONTEXT.ut, allRecords),
+    buildScopeStatistics("village", context.village, villageRecords),
+    buildScopeStatistics("taluk", context.taluk, allRecords),
+    buildScopeStatistics("district", context.district, allRecords),
+    buildScopeStatistics("ut", context.ut, allRecords),
   ];
 }
 

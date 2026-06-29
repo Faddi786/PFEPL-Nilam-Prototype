@@ -10,7 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { EmptyResults, ResultsHeader, RunAnalysisButton, ToolShell } from "./MoreToolsShared";
-import { SPATIAL_CONTEXT, getStatisticsByScope, type StatisticsScope } from "../../data/cadastralSpatialData";
+import { getSpatialContext, getStatisticsByScope, type StatisticsScope } from "../../data/cadastralSpatialData";
 
 const SCOPE_OPTIONS: { value: StatisticsScope; label: string }[] = [
   { value: "village", label: "Village" },
@@ -71,7 +71,7 @@ export default function StatisticsTool() {
       map={
         <div className="flex h-full min-h-[320px] items-center justify-center rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 p-6 text-center">
           <div>
-            <p className="text-sm font-medium text-slate-700">{SPATIAL_CONTEXT.ut} — {stats.label}</p>
+            <p className="text-sm font-medium text-slate-700">{getSpatialContext().ut} — {stats.label}</p>
             <p className="mt-2 text-3xl font-semibold text-[#1A1A1A]">
               {analyzed ? stats.totalParcels.toLocaleString() : "—"}
             </p>

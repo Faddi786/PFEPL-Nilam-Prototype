@@ -25,6 +25,8 @@ export type DemoResultRow = Record<string, string | number>;
 
 export type SpatialDemoOutput = {
   overlays: MapOverlay[];
+  highlightParcelIds?: string[];
+  highlightOptions?: { colorByVariance?: boolean };
   rows: DemoResultRow[];
   summary: string;
   badge?: string;
@@ -32,24 +34,22 @@ export type SpatialDemoOutput = {
   columns: { key: string; label: string }[];
 };
 
-function parcelPoly(p: CadastralParcel) {
-  return turf.polygon([p.ring]);
+function withHighlights(
+  overlays: MapOverlay[],
+  highlightIds: Iterable<string>,
+  result: Omit<SpatialDemoOutput, "overlays" | "highlightParcelIds" | "highlightOptions">,
+  highlightOptions?: SpatialDemoOutput["highlightOptions"],
+): SpatialDemoOutput {
+  return {
+    overlays,
+    highlightParcelIds: [...highlightIds],
+    highlightOptions,
+    ...result,
+  };
 }
 
-function baseParcelOverlays(
-  highlightIds: Set<string>,
-  highlightFill = "rgba(34,197,94,0.45)",
-  highlightStroke = "#16a34a",
-): MapOverlay[] {
-  return getCadastralParcels().map((p) => ({
-    id: `parcel-${p.id}`,
-    type: "polygon" as const,
-    coordinates: p.ring,
-    fill: highlightIds.has(p.id) ? highlightFill : "rgba(148,163,184,0.2)",
-    stroke: highlightIds.has(p.id) ? highlightStroke : "#64748b",
-    strokeWidth: highlightIds.has(p.id) ? 2 : 1,
-    zIndex: highlightIds.has(p.id) ? 4 : 1,
-  }));
+function parcelPoly(p: CadastralParcel) {
+  return turf.polygon([p.ring]);
 }
 
 function boundaryOverlay(
@@ -111,23 +111,23 @@ export function runContainsWithinDemo(): SpatialDemoOutput {
     }
   });
   const ids = new Set(inside.map((p) => p.id));
-  return {
-    overlays: [
-      boundaryOverlay("village", villageBoundary, "#7c3aed", "rgba(124,58,237,0.12)"),
-      ...baseParcelOverlays(ids),
-    ],
-    rows: parcelRows(inside, () => ({ status: "Fully within Khutal boundary" })),
-    summary: `${inside.length} parcels fully within village boundary`,
-    badge: "ST_Within",
-    badgeTone: inside.length > 0 ? "success" : "neutral",
-    columns: [
-      { key: "surveyNo", label: "Survey No" },
-      { key: "owner", label: "Owner" },
-      { key: "classification", label: "Class" },
-      { key: "areaSqM", label: "Area (sq.m)" },
-      { key: "status", label: "Status" },
-    ],
-  };
+  return withHighlights(
+    [boundaryOverlay("village", villageBoundary, "#7c3aed", "rgba(124,58,237,0.12)")],
+    ids,
+    {
+      rows: parcelRows(inside, () => ({ status: "Fully within Khutal boundary" })),
+      summary: `${inside.length} parcels fully within village boundary`,
+      badge: "ST_Within",
+      badgeTone: inside.length > 0 ? "success" : "neutral",
+      columns: [
+        { key: "surveyNo", label: "Survey No" },
+        { key: "owner", label: "Owner" },
+        { key: "classification", label: "Class" },
+        { key: "areaSqM", label: "Area (sq.m)" },
+        { key: "status", label: "Status" },
+      ],
+    },
+  );
 }
 
 export function runTouchesDemo(): SpatialDemoOutput {
@@ -142,9 +142,8 @@ export function runTouchesDemo(): SpatialDemoOutput {
     }
   });
   const ids = new Set([selected.id, ...touching.map((p) => p.id)]);
-  return {
-    overlays: [
-      ...baseParcelOverlays(ids, "rgba(59,130,246,0.4)", "#2563eb"),
+  return withHighlights(
+    [
       {
         id: "selected",
         type: "polygon",
@@ -155,22 +154,25 @@ export function runTouchesDemo(): SpatialDemoOutput {
         zIndex: 5,
       },
     ],
-    rows: touching.map((p) => ({
-      surveyNo: p.surveyNo,
-      neighborOf: selected.surveyNo,
-      owner: p.owner,
-      sharedBoundary: "Yes",
-    })),
-    summary: `${touching.length} parcels touch ${selected.surveyNo}`,
-    badge: "ST_Touches",
-    badgeTone: "neutral",
-    columns: [
-      { key: "surveyNo", label: "Survey No" },
-      { key: "neighborOf", label: "Neighbor of" },
-      { key: "owner", label: "Owner" },
-      { key: "sharedBoundary", label: "Shared boundary" },
-    ],
-  };
+    ids,
+    {
+      rows: touching.map((p) => ({
+        surveyNo: p.surveyNo,
+        neighborOf: selected.surveyNo,
+        owner: p.owner,
+        sharedBoundary: "Yes",
+      })),
+      summary: `${touching.length} parcels touch ${selected.surveyNo}`,
+      badge: "ST_Touches",
+      badgeTone: "neutral",
+      columns: [
+        { key: "surveyNo", label: "Survey No" },
+        { key: "neighborOf", label: "Neighbor of" },
+        { key: "owner", label: "Owner" },
+        { key: "sharedBoundary", label: "Shared boundary" },
+      ],
+    },
+  );
 }
 
 export function runDisjointDemo(): SpatialDemoOutput {
@@ -184,22 +186,22 @@ export function runDisjointDemo(): SpatialDemoOutput {
     }
   });
   const ids = new Set(disjoint.map((p) => p.id));
-  return {
-    overlays: [
-      boundaryOverlay("flood", floodZone, "#0284c7", "rgba(2,132,199,0.2)"),
-      ...baseParcelOverlays(ids, "rgba(34,197,94,0.4)", "#16a34a"),
-    ],
-    rows: parcelRows(disjoint, () => ({ refLayer: "Flood hazard zone", overlap: "None" })),
-    summary: `${disjoint.length} parcels disjoint from flood zone`,
-    badge: "ST_Disjoint",
-    badgeTone: "success",
-    columns: [
-      { key: "surveyNo", label: "Survey No" },
-      { key: "owner", label: "Owner" },
-      { key: "refLayer", label: "Reference layer" },
-      { key: "overlap", label: "Overlap" },
-    ],
-  };
+  return withHighlights(
+    [boundaryOverlay("flood", floodZone, "#0284c7", "rgba(2,132,199,0.2)")],
+    ids,
+    {
+      rows: parcelRows(disjoint, () => ({ refLayer: "Flood hazard zone", overlap: "None" })),
+      summary: `${disjoint.length} parcels disjoint from flood zone`,
+      badge: "ST_Disjoint",
+      badgeTone: "success",
+      columns: [
+        { key: "surveyNo", label: "Survey No" },
+        { key: "owner", label: "Owner" },
+        { key: "refLayer", label: "Reference layer" },
+        { key: "overlap", label: "Overlap" },
+      ],
+    },
+  );
 }
 
 export function runCrossesDemo(): SpatialDemoOutput {
@@ -213,35 +215,36 @@ export function runCrossesDemo(): SpatialDemoOutput {
     }
   });
   const ids = new Set(crossed.map((p) => p.id));
-  const overlays: MapOverlay[] = [
-    ...baseParcelOverlays(ids, "rgba(239,68,68,0.45)", "#dc2626"),
-    {
-      id: "road",
-      type: "line",
-      coordinates: bufferFeatures.road.line,
-      stroke: "#475569",
-      strokeWidth: 4,
-      zIndex: 5,
-    },
-  ];
-  return {
-    overlays,
-    rows: crossed.map((p) => ({
-      surveyNo: p.surveyNo,
-      road: "NH-45A Highway",
-      crossing: "Line crosses parcel",
-      owner: p.owner,
-    })),
-    summary: `${crossed.length} parcels crossed by NH-45A`,
-    badge: "ST_Crosses",
-    badgeTone: crossed.length > 0 ? "warning" : "success",
-    columns: [
-      { key: "surveyNo", label: "Survey No" },
-      { key: "road", label: "Road" },
-      { key: "crossing", label: "Relation" },
-      { key: "owner", label: "Owner" },
+  return withHighlights(
+    [
+      {
+        id: "road",
+        type: "line",
+        coordinates: bufferFeatures.road.line,
+        stroke: "#475569",
+        strokeWidth: 4,
+        zIndex: 5,
+      },
     ],
-  };
+    ids,
+    {
+      rows: crossed.map((p) => ({
+        surveyNo: p.surveyNo,
+        road: bufferFeatures.road.label,
+        crossing: "Line crosses parcel",
+        owner: p.owner,
+      })),
+      summary: `${crossed.length} parcels crossed by ${bufferFeatures.road.label}`,
+      badge: "ST_Crosses",
+      badgeTone: crossed.length > 0 ? "warning" : "success",
+      columns: [
+        { key: "surveyNo", label: "Survey No" },
+        { key: "road", label: "Road" },
+        { key: "crossing", label: "Relation" },
+        { key: "owner", label: "Owner" },
+      ],
+    },
+  );
 }
 
 export function runDistanceQueryDemo(distanceM = 120): SpatialDemoOutput {
@@ -260,10 +263,7 @@ export function runDistanceQueryDemo(distanceM = 120): SpatialDemoOutput {
   });
   const ids = new Set(nearby.map((x) => x.parcel.id));
   const bufferRing = turf.buffer(point, distanceM, { units: "meters" });
-  const overlays: MapOverlay[] = [
-    pointOverlay("dgps", dgpsPoint),
-    ...baseParcelOverlays(ids, "rgba(249,115,22,0.45)", "#ea580c"),
-  ];
+  const overlays: MapOverlay[] = [pointOverlay("dgps", dgpsPoint)];
   if (bufferRing?.geometry?.type === "Polygon") {
     overlays.push({
       id: "distance-ring",
@@ -276,8 +276,7 @@ export function runDistanceQueryDemo(distanceM = 120): SpatialDemoOutput {
       zIndex: 2,
     });
   }
-  return {
-    overlays,
+  return withHighlights(overlays, ids, {
     rows: nearby.map(({ parcel: p, distanceM: d }) => ({
       surveyNo: p.surveyNo,
       distanceM: d,
@@ -293,7 +292,7 @@ export function runDistanceQueryDemo(distanceM = 120): SpatialDemoOutput {
       { key: "owner", label: "Owner" },
       { key: "classification", label: "Class" },
     ],
-  };
+  });
 }
 
 export function runNearestNeighborDemo(): SpatialDemoOutput {
@@ -309,11 +308,7 @@ export function runNearestNeighborDemo(): SpatialDemoOutput {
     }
   }
   const ids = new Set(nearest ? [nearest.id] : []);
-  return {
-    overlays: [
-      pointOverlay("dgps", dgpsPoint),
-      ...baseParcelOverlays(ids, "rgba(34,197,94,0.5)", "#16a34a"),
-    ],
+  return withHighlights([pointOverlay("dgps", dgpsPoint)], ids, {
     rows: nearest
       ? [{ surveyNo: nearest.surveyNo, distanceM: Math.round(minDist), owner: nearest.owner, areaSqM: nearest.areaSqM }]
       : [],
@@ -326,7 +321,7 @@ export function runNearestNeighborDemo(): SpatialDemoOutput {
       { key: "owner", label: "Owner" },
       { key: "areaSqM", label: "Area (sq.m)" },
     ],
-  };
+  });
 }
 
 export function runPointInPolygonDemo(): SpatialDemoOutput {
@@ -340,11 +335,7 @@ export function runPointInPolygonDemo(): SpatialDemoOutput {
     }
   });
   const ids = new Set(containing.map((p) => p.id));
-  return {
-    overlays: [
-      pointOverlay("click-point", dgpsPoint, "#7c3aed"),
-      ...baseParcelOverlays(ids, "rgba(124,58,237,0.45)", "#7c3aed"),
-    ],
+  return withHighlights([pointOverlay("click-point", dgpsPoint, "#7c3aed")], ids, {
     rows: containing.map((p) => ({
       surveyNo: p.surveyNo,
       owner: p.owner,
@@ -364,7 +355,7 @@ export function runPointInPolygonDemo(): SpatialDemoOutput {
       { key: "areaSqM", label: "Area (sq.m)" },
       { key: "containsPoint", label: "Contains point" },
     ],
-  };
+  });
 }
 
 export function runBoundingBoxDemo(): SpatialDemoOutput {
@@ -379,37 +370,30 @@ export function runBoundingBoxDemo(): SpatialDemoOutput {
     }
   });
   const ids = new Set(inExtent.map((p) => p.id));
-  return {
-    overlays: [
-      boundaryOverlay("viewport", viewportExtent, "#0d9488", "rgba(13,148,136,0.15)"),
-      ...baseParcelOverlays(ids),
-    ],
-    rows: parcelRows(inExtent, () => ({ inViewport: "Yes" })),
-    summary: `${inExtent.length} parcels in current viewport extent`,
-    badge: "Extent select",
-    badgeTone: "neutral",
-    columns: [
-      { key: "surveyNo", label: "Survey No" },
-      { key: "owner", label: "Owner" },
-      { key: "classification", label: "Class" },
-      { key: "inViewport", label: "In viewport" },
-    ],
-  };
+  return withHighlights(
+    [boundaryOverlay("viewport", viewportExtent, "#0d9488", "rgba(13,148,136,0.15)")],
+    ids,
+    {
+      rows: parcelRows(inExtent, () => ({ inViewport: "Yes" })),
+      summary: `${inExtent.length} parcels in current viewport extent`,
+      badge: "Extent select",
+      badgeTone: "neutral",
+      columns: [
+        { key: "surveyNo", label: "Survey No" },
+        { key: "owner", label: "Owner" },
+        { key: "classification", label: "Class" },
+        { key: "inViewport", label: "In viewport" },
+      ],
+    },
+  );
 }
 
 export function runUnionDemo(): SpatialDemoOutput {
   const pair = getCadastralParcels().slice(0, 2);
   const polys = pair.map((p) => parcelPoly(p));
   const unioned = turf.union(turf.featureCollection(polys));
-  const overlays: MapOverlay[] = pair.map((p, i) => ({
-    id: `parcel-${i}`,
-    type: "polygon",
-    coordinates: p.ring,
-    fill: "rgba(59,130,246,0.3)",
-    stroke: "#2563eb",
-    strokeWidth: 2,
-    zIndex: 2,
-  }));
+  const areaSqM = unioned ? Math.round(turf.area(unioned)) : 0;
+  const overlays: MapOverlay[] = [];
   if (unioned?.geometry?.type === "Polygon") {
     overlays.push({
       id: "union-result",
@@ -422,9 +406,7 @@ export function runUnionDemo(): SpatialDemoOutput {
       zIndex: 4,
     });
   }
-  const areaSqM = unioned ? Math.round(turf.area(unioned)) : 0;
-  return {
-    overlays,
+  return withHighlights(overlays, pair.map((p) => p.id), {
     rows: [
       {
         inputParcels: pair.map((p) => p.surveyNo).join(" + "),
@@ -442,7 +424,7 @@ export function runUnionDemo(): SpatialDemoOutput {
       { key: "operation", label: "Operation" },
       { key: "village", label: "Village" },
     ],
-  };
+  });
 }
 
 export function runDifferenceDemo(): SpatialDemoOutput {
@@ -457,15 +439,6 @@ export function runDifferenceDemo(): SpatialDemoOutput {
   ]);
   const diff = turf.difference(turf.featureCollection([parcelPoly(parcel), encroach]));
   const overlays: MapOverlay[] = [
-    {
-      id: "parcel",
-      type: "polygon",
-      coordinates: parcel.ring,
-      fill: "rgba(148,163,184,0.25)",
-      stroke: "#64748b",
-      strokeWidth: 2,
-      zIndex: 2,
-    },
     {
       id: "subtract",
       type: "polygon",
@@ -489,8 +462,7 @@ export function runDifferenceDemo(): SpatialDemoOutput {
   }
   const netArea = diff ? Math.round(turf.area(diff)) : 0;
   const removed = parcel.areaSqM - netArea;
-  return {
-    overlays,
+  return withHighlights(overlays, [parcel.id], {
     rows: [
       {
         surveyNo: parcel.surveyNo,
@@ -508,7 +480,7 @@ export function runDifferenceDemo(): SpatialDemoOutput {
       { key: "removedSqM", label: "Removed (sq.m)" },
       { key: "netSqM", label: "Net (sq.m)" },
     ],
-  };
+  });
 }
 
 export function runClipDemo(): SpatialDemoOutput {
@@ -523,27 +495,27 @@ export function runClipDemo(): SpatialDemoOutput {
     }
   }).filter((x) => x.clipped);
   const ids = new Set(clipped.map((x) => x.parcel.id));
-  return {
-    overlays: [
-      boundaryOverlay("boundary", villageBoundary, "#7c3aed", "rgba(124,58,237,0.1)"),
-      ...baseParcelOverlays(ids, "rgba(13,148,136,0.4)", "#0d9488"),
-    ],
-    rows: clipped.map(({ parcel: p }) => ({
-      surveyNo: p.surveyNo,
-      owner: p.owner,
-      clippedTo: "Khutal village",
-      areaSqM: p.areaSqM,
-    })),
-    summary: `${clipped.length} parcels clipped to village boundary`,
-    badge: "ST_Clip",
-    badgeTone: "success",
-    columns: [
-      { key: "surveyNo", label: "Survey No" },
-      { key: "owner", label: "Owner" },
-      { key: "clippedTo", label: "Clipped to" },
-      { key: "areaSqM", label: "Area (sq.m)" },
-    ],
-  };
+  return withHighlights(
+    [boundaryOverlay("boundary", villageBoundary, "#7c3aed", "rgba(124,58,237,0.1)")],
+    ids,
+    {
+      rows: clipped.map(({ parcel: p }) => ({
+        surveyNo: p.surveyNo,
+        owner: p.owner,
+        clippedTo: "Khutal village",
+        areaSqM: p.areaSqM,
+      })),
+      summary: `${clipped.length} parcels clipped to village boundary`,
+      badge: "ST_Clip",
+      badgeTone: "success",
+      columns: [
+        { key: "surveyNo", label: "Survey No" },
+        { key: "owner", label: "Owner" },
+        { key: "clippedTo", label: "Clipped to" },
+        { key: "areaSqM", label: "Area (sq.m)" },
+      ],
+    },
+  );
 }
 
 export function runDissolveDemo(): SpatialDemoOutput {
@@ -559,9 +531,7 @@ export function runDissolveDemo(): SpatialDemoOutput {
   const ids = new Set(group.map((p) => p.id));
   const polys = group.map((p) => parcelPoly(p));
   const dissolved = turf.union(turf.featureCollection(polys));
-  const overlays: MapOverlay[] = [
-    ...baseParcelOverlays(ids, "rgba(59,130,246,0.35)", "#2563eb"),
-  ];
+  const overlays: MapOverlay[] = [];
   if (dissolved?.geometry?.type === "Polygon") {
     overlays.push({
       id: "dissolved",
@@ -575,8 +545,7 @@ export function runDissolveDemo(): SpatialDemoOutput {
     });
   }
   const totalArea = dissolved ? Math.round(turf.area(dissolved)) : 0;
-  return {
-    overlays,
+  return withHighlights(overlays, ids, {
     rows: [
       {
         owner,
@@ -594,7 +563,7 @@ export function runDissolveDemo(): SpatialDemoOutput {
       { key: "surveys", label: "Survey Nos" },
       { key: "totalAreaSqM", label: "Total area (sq.m)" },
     ],
-  };
+  });
 }
 
 export function runConvexHullDemo(): SpatialDemoOutput {
@@ -602,7 +571,7 @@ export function runConvexHullDemo(): SpatialDemoOutput {
   const collection = turf.featureCollection(selected.map((p) => parcelPoly(p)));
   const hull = turf.convex(collection);
   const ids = new Set(selected.map((p) => p.id));
-  const overlays: MapOverlay[] = [...baseParcelOverlays(ids)];
+  const overlays: MapOverlay[] = [];
   if (hull?.geometry?.type === "Polygon") {
     overlays.push({
       id: "hull",
@@ -616,8 +585,7 @@ export function runConvexHullDemo(): SpatialDemoOutput {
     });
   }
   const hullArea = hull ? Math.round(turf.area(hull)) : 0;
-  return {
-    overlays,
+  return withHighlights(overlays, ids, {
     rows: [
       {
         parcelCount: selected.length,
@@ -635,14 +603,12 @@ export function runConvexHullDemo(): SpatialDemoOutput {
       { key: "hullAreaSqM", label: "Hull area (sq.m)" },
       { key: "village", label: "Village" },
     ],
-  };
+  });
 }
 
 export function runCentroidDemo(): SpatialDemoOutput {
   const sample = getCadastralParcels().slice(0, 6);
-  const overlays: MapOverlay[] = [
-    ...baseParcelOverlays(new Set(sample.map((p) => p.id)), "rgba(148,163,184,0.2)", "#64748b"),
-  ];
+  const overlays: MapOverlay[] = [];
   const rows: DemoResultRow[] = [];
   for (const p of sample) {
     const c = turf.centroid(parcelPoly(p));
@@ -655,8 +621,7 @@ export function runCentroidDemo(): SpatialDemoOutput {
       areaSqM: p.areaSqM,
     });
   }
-  return {
-    overlays,
+  return withHighlights(overlays, sample.map((p) => p.id), {
     rows,
     summary: `Centroids computed for ${sample.length} parcels`,
     badge: "ST_Centroid",
@@ -667,36 +632,18 @@ export function runCentroidDemo(): SpatialDemoOutput {
       { key: "centroidLat", label: "Lat" },
       { key: "areaSqM", label: "Area (sq.m)" },
     ],
-  };
+  });
 }
 
 export function runSymmetricalDiffDemo(): SpatialDemoOutput {
-  const a = turf.polygon([getCadastralParcels()[0].ring]);
-  const b = turf.polygon([getCadastralParcels()[1].ring]);
+  const parcels = getCadastralParcels();
+  const a = turf.polygon([parcels[0].ring]);
+  const b = turf.polygon([parcels[1].ring]);
   const aMinusB = turf.difference(turf.featureCollection([a, b]));
   const bMinusA = turf.difference(turf.featureCollection([b, a]));
   const parts = [aMinusB, bMinusA].filter((f): f is NonNullable<typeof aMinusB> => Boolean(f));
   const symDiff = parts.length ? turf.union(turf.featureCollection(parts)) : null;
-  const overlays: MapOverlay[] = [
-    {
-      id: "layer-a",
-      type: "polygon",
-      coordinates: getCadastralParcels()[0].ring,
-      fill: "rgba(59,130,246,0.3)",
-      stroke: "#2563eb",
-      strokeWidth: 2,
-      zIndex: 2,
-    },
-    {
-      id: "layer-b",
-      type: "polygon",
-      coordinates: getCadastralParcels()[1].ring,
-      fill: "rgba(16,185,129,0.25)",
-      stroke: "#059669",
-      strokeWidth: 2,
-      zIndex: 2,
-    },
-  ];
+  const overlays: MapOverlay[] = [];
   if (symDiff?.geometry?.type === "Polygon") {
     overlays.push({
       id: "sym-diff",
@@ -709,12 +656,11 @@ export function runSymmetricalDiffDemo(): SpatialDemoOutput {
     });
   }
   const exclusiveArea = symDiff ? Math.round(turf.area(symDiff)) : 0;
-  return {
-    overlays,
+  return withHighlights(overlays, [parcels[0].id, parcels[1].id], {
     rows: [
       {
-        parcelA: getCadastralParcels()[0].surveyNo,
-        parcelB: getCadastralParcels()[1].surveyNo,
+        parcelA: parcels[0].surveyNo,
+        parcelB: parcels[1].surveyNo,
         exclusiveAreaSqM: exclusiveArea,
         relation: "A ⊕ B (exclusive)",
       },
@@ -728,7 +674,7 @@ export function runSymmetricalDiffDemo(): SpatialDemoOutput {
       { key: "exclusiveAreaSqM", label: "Exclusive (sq.m)" },
       { key: "relation", label: "Relation" },
     ],
-  };
+  });
 }
 
 export function runSpatialJoinDemo(): SpatialDemoOutput {
@@ -745,23 +691,23 @@ export function runSpatialJoinDemo(): SpatialDemoOutput {
     };
   });
   const ids = new Set(getCadastralParcels().slice(0, 8).map((p) => p.id));
-  return {
-    overlays: [
-      boundaryOverlay("village", villageBoundary, "#7c3aed", "rgba(124,58,237,0.1)"),
-      ...baseParcelOverlays(ids),
-    ],
-    rows: joined,
-    summary: `Spatial join: village attributes attached to ${joined.length} parcels`,
-    badge: "Spatial join",
-    badgeTone: "success",
-    columns: [
-      { key: "surveyNo", label: "Survey No" },
-      { key: "owner", label: "Owner" },
-      { key: "village", label: "Village" },
-      { key: "taluk", label: "Taluk" },
-      { key: "ward", label: "Ward" },
-    ],
-  };
+  return withHighlights(
+    [boundaryOverlay("village", villageBoundary, "#7c3aed", "rgba(124,58,237,0.1)")],
+    ids,
+    {
+      rows: joined,
+      summary: `Spatial join: village attributes attached to ${joined.length} parcels`,
+      badge: "Spatial join",
+      badgeTone: "success",
+      columns: [
+        { key: "surveyNo", label: "Survey No" },
+        { key: "owner", label: "Owner" },
+        { key: "village", label: "Village" },
+        { key: "taluk", label: "Taluk" },
+        { key: "ward", label: "Ward" },
+      ],
+    },
+  );
 }
 
 export function runSelectByLocationDemo(): SpatialDemoOutput {
@@ -775,27 +721,27 @@ export function runSelectByLocationDemo(): SpatialDemoOutput {
     }
   });
   const ids = new Set(selected.map((p) => p.id));
-  return {
-    overlays: [
-      boundaryOverlay("flood", floodZone, "#0284c7", "rgba(2,132,199,0.2)"),
-      ...baseParcelOverlays(ids, "rgba(239,68,68,0.45)", "#dc2626"),
-    ],
-    rows: selected.map((p) => ({
-      surveyNo: p.surveyNo,
-      classification: p.classification,
-      filter: "Private AND in flood zone",
-      owner: p.owner,
-    })),
-    summary: `${selected.length} private parcels in flood zone`,
-    badge: "Attribute + spatial",
-    badgeTone: "danger",
-    columns: [
-      { key: "surveyNo", label: "Survey No" },
-      { key: "classification", label: "Class" },
-      { key: "filter", label: "Filter" },
-      { key: "owner", label: "Owner" },
-    ],
-  };
+  return withHighlights(
+    [boundaryOverlay("flood", floodZone, "#0284c7", "rgba(2,132,199,0.2)")],
+    ids,
+    {
+      rows: selected.map((p) => ({
+        surveyNo: p.surveyNo,
+        classification: p.classification,
+        filter: "Private AND in flood zone",
+        owner: p.owner,
+      })),
+      summary: `${selected.length} private parcels in flood zone`,
+      badge: "Attribute + spatial",
+      badgeTone: "danger",
+      columns: [
+        { key: "surveyNo", label: "Survey No" },
+        { key: "classification", label: "Class" },
+        { key: "filter", label: "Filter" },
+        { key: "owner", label: "Owner" },
+      ],
+    },
+  );
 }
 
 export function runKNearestDemo(k = 5): SpatialDemoOutput {
@@ -808,11 +754,7 @@ export function runKNearestDemo(k = 5): SpatialDemoOutput {
     .sort((a, b) => a.distanceM - b.distanceM)
     .slice(0, k);
   const ids = new Set(ranked.map((x) => x.parcel.id));
-  return {
-    overlays: [
-      pointOverlay("dgps", dgpsPoint),
-      ...baseParcelOverlays(ids, "rgba(59,130,246,0.4)", "#2563eb"),
-    ],
+  return withHighlights([pointOverlay("dgps", dgpsPoint)], ids, {
     rows: ranked.map((x, i) => ({
       rank: i + 1,
       surveyNo: x.parcel.surveyNo,
@@ -828,7 +770,7 @@ export function runKNearestDemo(k = 5): SpatialDemoOutput {
       { key: "distanceM", label: "Distance (m)" },
       { key: "owner", label: "Owner" },
     ],
-  };
+  });
 }
 
 export function runRouteProximityDemo(): SpatialDemoOutput {
@@ -858,7 +800,6 @@ export function runRouteProximityDemo(): SpatialDemoOutput {
       strokeWidth: 4,
       zIndex: 5,
     },
-    ...baseParcelOverlays(ids, "rgba(249,115,22,0.45)", "#ea580c"),
   ];
   if (bufferPoly) {
     overlays.push({
@@ -872,15 +813,14 @@ export function runRouteProximityDemo(): SpatialDemoOutput {
       zIndex: 2,
     });
   }
-  return {
-    overlays,
+  return withHighlights(overlays, ids, {
     rows: inCorridor.map((p) => ({
       surveyNo: p.surveyNo,
-      corridor: "NH-45A widening (40 m)",
+      corridor: `${bufferFeatures.road.label} widening (40 m)`,
       owner: p.owner,
       classification: p.classification,
     })),
-    summary: `${inCorridor.length} parcels along NH-45A corridor`,
+    summary: `${inCorridor.length} parcels along ${bufferFeatures.road.label} corridor`,
     badge: "40 m ROW",
     badgeTone: "warning",
     columns: [
@@ -889,34 +829,18 @@ export function runRouteProximityDemo(): SpatialDemoOutput {
       { key: "owner", label: "Owner" },
       { key: "classification", label: "Class" },
     ],
-  };
+  });
 }
 
 export function getBaseParcelOverlays(): MapOverlay[] {
-  return getCadastralParcels().map((p) => ({
-    id: `parcel-${p.id}`,
-    type: "polygon" as const,
-    coordinates: p.ring,
-    fill: "rgba(148,163,184,0.2)",
-    stroke: "#64748b",
-    strokeWidth: 1,
-    zIndex: 1,
-  }));
+  return [];
 }
 
 export function runBufferDemo(featureType: "road" | "river" | "canal" = "road", distanceM = 50): SpatialDemoOutput {
   const bufferFeatures = getBufferFeatures();
   const parcelsInBuffer = getParcelsInBuffer(featureType, distanceM);
   const ids = new Set(parcelsInBuffer.map((p) => p.id));
-  const overlays: MapOverlay[] = getCadastralParcels().map((p) => ({
-    id: `parcel-${p.id}`,
-    type: "polygon",
-    coordinates: p.ring,
-    fill: ids.has(p.id) ? "rgba(239,68,68,0.45)" : "rgba(148,163,184,0.2)",
-    stroke: ids.has(p.id) ? "#dc2626" : "#64748b",
-    strokeWidth: ids.has(p.id) ? 2 : 1,
-    zIndex: ids.has(p.id) ? 4 : 1,
-  }));
+  const overlays: MapOverlay[] = [];
 
   const bufferRing = buildBufferPolygon(featureType, distanceM);
   if (bufferRing.length) {
@@ -941,8 +865,7 @@ export function runBufferDemo(featureType: "road" | "river" | "canal" = "road", 
     zIndex: 5,
   });
 
-  return {
-    overlays,
+  return withHighlights(overlays, ids, {
     rows: parcelsInBuffer.map((p) => ({
       surveyNo: p.surveyNo,
       owner: p.owner,
@@ -958,47 +881,15 @@ export function runBufferDemo(featureType: "road" | "river" | "canal" = "road", 
       { key: "classification", label: "Classification" },
       { key: "areaSqM", label: "Area (sq.m)" },
     ],
-  };
+  });
 }
 
 export function runAreaDiffDemo(): SpatialDemoOutput {
   const areaDiffCases = getAreaDiffCases();
   const selected = areaDiffCases[0];
-  const overlays: MapOverlay[] = getCadastralParcels().slice(0, 8).map((p, i) => {
-    const status = areaDiffCases[i % areaDiffCases.length]?.status;
-    return {
-      id: `parcel-${p.id}`,
-      type: "polygon" as const,
-      coordinates: p.ring,
-      fill:
-        status === "critical"
-          ? "rgba(239,68,68,0.35)"
-          : status === "moderate"
-            ? "rgba(245,158,11,0.35)"
-            : "rgba(148,163,184,0.2)",
-      stroke: "#64748b",
-      strokeWidth: 1,
-      zIndex: 1,
-    };
-  });
-
-  const idx = 0;
-  const parcel = getCadastralParcels()[idx % getCadastralParcels().length];
-  if (parcel) {
-    overlays.push({
-      id: "highlight",
-      type: "polygon",
-      coordinates: parcel.ring,
-      fill: "rgba(236,72,153,0.35)",
-      stroke: "#db2777",
-      strokeWidth: 2.5,
-      zIndex: 3,
-    });
-  }
-
+  const highlightIds = areaDiffCases.map((row) => row.parcelId);
   const totalDiff = areaDiffCases.reduce((s, c) => s + c.diffSqM, 0);
-  return {
-    overlays,
+  return withHighlights([], highlightIds, {
     rows: areaDiffCases.map((row) => ({
       surveyNo: row.surveyNo,
       village: row.village,
@@ -1018,23 +909,13 @@ export function runAreaDiffDemo(): SpatialDemoOutput {
       { key: "diffSqM", label: "Diff (sq.m)" },
       { key: "status", label: "Status" },
     ],
-  };
+  }, { colorByVariance: true });
 }
 
 export function runEncroachmentDemo(): SpatialDemoOutput {
   const encroachmentCases = getEncroachmentCases();
-  const selected = encroachmentCases[0];
   const totalEncroached = encroachmentCases.reduce((s, c) => s + c.encroachedAreaSqM, 0);
   const overlays: MapOverlay[] = [
-    ...getCadastralParcels().slice(0, 6).map((p) => ({
-      id: `parcel-${p.id}`,
-      type: "polygon" as const,
-      coordinates: p.ring,
-      fill: "rgba(148,163,184,0.15)",
-      stroke: "#94a3b8",
-      strokeWidth: 1,
-      zIndex: 1,
-    })),
     {
       id: "govt-land",
       type: "polygon" as const,
@@ -1045,21 +926,9 @@ export function runEncroachmentDemo(): SpatialDemoOutput {
       zIndex: 2,
     },
   ];
+  const highlightIds = encroachmentCases.map((row) => row.parcelId);
 
-  if (selected) {
-    overlays.push({
-      id: "encroachment",
-      type: "polygon" as const,
-      coordinates: selected.ring,
-      fill: "rgba(239,68,68,0.55)",
-      stroke: "#dc2626",
-      strokeWidth: 2.5,
-      zIndex: 4,
-    });
-  }
-
-  return {
-    overlays,
+  return withHighlights(overlays, highlightIds, {
     rows: encroachmentCases.map((row) => ({
       surveyNo: row.surveyNo,
       govtLandType: row.govtLandType,
@@ -1077,7 +946,7 @@ export function runEncroachmentDemo(): SpatialDemoOutput {
       { key: "encroachedAreaSqM", label: "Area (sq.m)" },
       { key: "status", label: "Status" },
     ],
-  };
+  });
 }
 
 export function runOverlapDemo(): SpatialDemoOutput {
@@ -1086,24 +955,6 @@ export function runOverlapDemo(): SpatialDemoOutput {
   const context = getSpatialContext();
   const overlays: MapOverlay[] = selected
     ? [
-        {
-          id: "parcel-a",
-          type: "polygon" as const,
-          coordinates: selected.ringA,
-          fill: "rgba(59,130,246,0.3)",
-          stroke: "#2563eb",
-          strokeWidth: 2,
-          zIndex: 2,
-        },
-        {
-          id: "parcel-b",
-          type: "polygon" as const,
-          coordinates: selected.ringB,
-          fill: "rgba(168,85,247,0.3)",
-          stroke: "#9333ea",
-          strokeWidth: 2,
-          zIndex: 2,
-        },
         {
           id: "overlap",
           type: "polygon" as const,
@@ -1114,10 +965,14 @@ export function runOverlapDemo(): SpatialDemoOutput {
           zIndex: 4,
         },
       ]
-    : baseParcelOverlays(new Set());
+    : [];
+  const highlightIds = selected
+    ? getCadastralParcels()
+        .filter((p) => p.surveyNo === selected.parcelA || p.surveyNo === selected.parcelB)
+        .map((p) => p.id)
+    : [];
 
-  return {
-    overlays,
+  return withHighlights(overlays, highlightIds, {
     rows: overlapCases.map((row) => ({
       parcelA: row.parcelA,
       parcelB: row.parcelB,
@@ -1137,7 +992,7 @@ export function runOverlapDemo(): SpatialDemoOutput {
       { key: "overlapAreaSqM", label: "Overlap (sq.m)" },
       { key: "severity", label: "Severity" },
     ],
-  };
+  });
 }
 
 export function runIntersectDemo(pairId?: string): SpatialDemoOutput {
@@ -1201,19 +1056,6 @@ export function runStatisticsDemo(): SpatialDemoOutput {
   const parcels = getCadastralParcels();
   const context = getSpatialContext();
   const dataset = getWorkbenchDataset();
-  const overlays: MapOverlay[] = parcels.map((p) => {
-    const attrs = dataset.parcelAttrs[p.id];
-    const isGovt = attrs ? isGovtParcel(attrs) : p.classification.toLowerCase().includes("gov");
-    return {
-      id: `parcel-${p.id}`,
-      type: "polygon" as const,
-      coordinates: p.ring,
-      fill: isGovt ? "rgba(245,158,11,0.4)" : "rgba(59,130,246,0.35)",
-      stroke: isGovt ? "#d97706" : "#2563eb",
-      strokeWidth: 1.5,
-      zIndex: 2,
-    };
-  });
 
   const govtCount = parcels.filter((p) => {
     const attrs = dataset.parcelAttrs[p.id];
@@ -1221,8 +1063,7 @@ export function runStatisticsDemo(): SpatialDemoOutput {
   }).length;
   const privateCount = parcels.length - govtCount;
 
-  return {
-    overlays,
+  return withHighlights([], parcels.map((p) => p.id), {
     rows: [{ govtParcels: govtCount, privateParcels: privateCount, totalParcels: parcels.length }],
     summary: `${context.village} — ${parcels.length} parcels in view`,
     badge: `${govtCount} govt · ${privateCount} private`,
@@ -1232,7 +1073,7 @@ export function runStatisticsDemo(): SpatialDemoOutput {
       { key: "govtParcels", label: "Government" },
       { key: "privateParcels", label: "Private" },
     ],
-  };
+  });
 }
 
 const DEMO_RUNNERS: Record<string, () => SpatialDemoOutput> = {

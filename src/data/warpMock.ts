@@ -55,6 +55,57 @@ export const GDAL_PANEL_DEFAULTS = {
   offsetY: -1.8,
 } as const;
 
+/** Thirunallar / Karaikal — Esri World Imagery tile context for georef canvas. */
+export const WARP_SATELLITE = {
+  center: [79.8418, 10.9246] as [number, number],
+  zoom: 17,
+  attribution: "Tiles © Esri",
+} as const;
+
+export function lngLatToTile(lng: number, lat: number, zoom: number): { x: number; y: number } {
+  const n = 2 ** zoom;
+  const x = Math.floor(((lng + 180) / 360) * n);
+  const latRad = (lat * Math.PI) / 180;
+  const y = Math.floor(
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n,
+  );
+  return { x, y };
+}
+
+export function esriWorldImageryTileUrl(z: number, x: number, y: number): string {
+  return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+}
+
+/** Apply GDAL panel stretch / rotate / offset to a normalized 0–100 point. */
+export function applySliderTransform(
+  point: [number, number],
+  stretch: number,
+  rotateDeg: number,
+  offsetX: number,
+  offsetY: number,
+  centroid: [number, number],
+): [number, number] {
+  const [cx, cy] = centroid;
+  const rad = (rotateDeg * Math.PI) / 180;
+  let [x, y] = point;
+  x = cx + (x - cx) * stretch;
+  y = cy + (y - cy) * stretch;
+  const dx = x - cx;
+  const dy = y - cy;
+  x = cx + dx * Math.cos(rad) - dy * Math.sin(rad);
+  y = cy + dx * Math.sin(rad) + dy * Math.cos(rad);
+  x += offsetX * 0.18;
+  y -= offsetY * 0.18;
+  return [x, y];
+}
+
+export function gcpCentroid(gcps: GcpAnchor[]): [number, number] {
+  if (gcps.length === 0) return [50, 50];
+  const sx = gcps.reduce((s, g) => s + g.fmb[0], 0) / gcps.length;
+  const sy = gcps.reduce((s, g) => s + g.fmb[1], 0) / gcps.length;
+  return [sx, sy];
+}
+
 export const INITIAL_GCPS: GcpAnchor[] = [
   {
     id: "gcp-temple",

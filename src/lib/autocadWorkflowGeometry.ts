@@ -1,3 +1,4 @@
+import * as turf from "@turf/turf";
 import { KHUTAL_PARCEL } from "../data/autocadWorkflowMock";
 
 /** SVG pixels per ground meter for demo map scaling. */
@@ -67,6 +68,34 @@ export type MapPreview = {
   polygons?: { points: SvgPoint[]; fill?: string; stroke?: string; label?: string }[];
   dashedEdges?: SvgPoint[][];
 };
+
+/** When set, preview overlays use FMB-scaled vertices instead of demo Khutal parcel coords. */
+export type MapGeometryContext = {
+  resolveVertex: (vertexId: string) => SvgPoint;
+  nextRingVertex: (vertexId: string) => string;
+  outerRing: SvgPoint[];
+  ringCentroid: () => SvgPoint;
+};
+
+function vtx(id: string, ctx?: MapGeometryContext): SvgPoint {
+  return ctx?.resolveVertex(id) ?? getVertexCoord(id);
+}
+
+function ringNext(id: string, ctx?: MapGeometryContext): string {
+  return ctx?.nextRingVertex(id) ?? nextRingVertex(id);
+}
+
+function ringCenter(ctx?: MapGeometryContext): SvgPoint {
+  return ctx?.ringCentroid() ?? polygonCentroid(PARCEL_SVG_RING);
+}
+
+function toward(fromId: string, towardsId: string, distanceM: number, ctx?: MapGeometryContext): SvgPoint {
+  return pointAlongSegment(vtx(fromId, ctx), vtx(towardsId, ctx), distanceM);
+}
+
+function towardCentroid(fromId: string, distanceM: number, ctx?: MapGeometryContext): SvgPoint {
+  return pointAlongSegment(vtx(fromId, ctx), ringCenter(ctx), distanceM);
+}
 
 export function parseGroundMeters(value: string, fallback = 0): number {
   const n = parseFloat(String(value).replace(/[^\d.-]/g, ""));
@@ -200,15 +229,12 @@ export function buildDistanceAnglePreview(
   betweenVertices: boolean,
   terminalDistance: string,
   refRows: RefRow[],
+  ctx?: MapGeometryContext,
 ): MapPreview {
   const dist = parseGroundMeters(terminalDistance);
   const first = betweenVertices
-    ? pointAlongSegment(
-        getVertexCoord(firstTerminal),
-        getVertexCoord(nextRingVertex(firstTerminal)),
-        dist,
-      )
-    : pointTowardsCentroid(firstTerminal, dist);
+    ? pointAlongSegment(vtx(firstTerminal, ctx), vtx(ringNext(firstTerminal, ctx), ctx), dist)
+    : towardCentroid(firstTerminal, dist, ctx);
 
   const intermediate: SvgPoint[] = [];
   const markers: MapMarker[] = [
@@ -219,12 +245,12 @@ export function buildDistanceAnglePreview(
     const d = parseGroundMeters(row.distance);
     const ang = parseAngleDeg(row.angle);
     if (d <= 0 && ang === 0 && !row.distance && !row.angle) return;
-    const pt = polarFrom(getVertexCoord(row.refPoint), d, ang);
+    const pt = polarFrom(vtx(row.refPoint, ctx), d, ang);
     intermediate.push(pt);
     markers.push({ x: pt[0], y: pt[1], label: `P${i + 1}`, color: "#ea580c" });
   });
 
-  const last = getVertexCoord(lastTerminal);
+  const last = vtx(lastTerminal, ctx);
   markers.push({ x: last[0], y: last[1], label: "A2", color: "#dc2626" });
 
   const polyline = [first, ...intermediate, last];
@@ -246,13 +272,14 @@ export function buildArcAdjacentPreview(
   arc1: string,
   arc2: string,
   intersection: string,
+  ctx?: MapGeometryContext,
 ): MapPreview {
-  const a1 = pointTowards(cornerPoint, towards1, parseGroundMeters(dist1));
-  const a3 = pointTowards(cornerPoint, towards2, parseGroundMeters(dist2));
+  const a1 = toward(cornerPoint, towards1, parseGroundMeters(dist1), ctx);
+  const a3 = toward(cornerPoint, towards2, parseGroundMeters(dist2), ctx);
   const r1 = parseGroundMeters(arc1);
   const r2 = parseGroundMeters(arc2);
   const hits = circleCircleIntersections(a1, r1, a3, r2);
-  const hintPt = getVertexCoord(cornerPoint);
+  const hintPt = vtx(cornerPoint, ctx);
   const mid = pickIntersection(hits, intersection as "P1" | "P2", hintPt);
 
   const arcs: MapArc[] = [
@@ -260,8 +287,9 @@ export function buildArcAdjacentPreview(
     { cx: a3[0], cy: a3[1], r: metersToSvg(r2), stroke: "#6366f1", dashed: true },
   ];
 
+  const corner = vtx(cornerPoint, ctx);
   const markers: MapMarker[] = [
-    { x: getVertexCoord(cornerPoint)[0], y: getVertexCoord(cornerPoint)[1], label: cornerPoint, color: "#1A1A1A" },
+    { x: corner[0], y: corner[1], label: cornerPoint, color: "#1A1A1A" },
     { x: a1[0], y: a1[1], label: "A1", color: "#dc2626" },
     { x: a3[0], y: a3[1], label: "A3", color: "#dc2626" },
   ];
@@ -287,14 +315,14 @@ export function buildArcOppositePreview(
   arc1: string,
   arc2: string,
   intersection: string,
+  ctx?: MapGeometryContext,
 ): MapPreview {
-  const a1 = pointTowards(point1, towards1, parseGroundMeters(dist1));
-  const a3 = pointTowards(point2, towards2, parseGroundMeters(dist2));
+  const a1 = toward(point1, towards1, parseGroundMeters(dist1), ctx);
+  const a3 = toward(point2, towards2, parseGroundMeters(dist2), ctx);
   const r1 = parseGroundMeters(arc1);
   const r2 = parseGroundMeters(arc2);
   const hits = circleCircleIntersections(a1, r1, a3, r2);
-  const c = polygonCentroid(PARCEL_SVG_RING);
-  const mid = pickIntersection(hits, intersection as "P1" | "P2", c);
+  const mid = pickIntersection(hits, intersection as "P1" | "P2", ringCenter(ctx));
 
   const arcs: MapArc[] = [
     { cx: a1[0], cy: a1[1], r: metersToSvg(r1), stroke: "#6366f1", dashed: true },
@@ -315,7 +343,7 @@ export function buildArcOppositePreview(
   };
 }
 
-export function buildPointMeasurePreview(rows: MeasureRow[]): MapPreview {
+export function buildPointMeasurePreview(rows: MeasureRow[], ctx?: MapGeometryContext): MapPreview {
   const markers: MapMarker[] = [];
   const polyline: SvgPoint[] = [];
   const circles: MapCircle[] = [];
@@ -325,15 +353,15 @@ export function buildPointMeasurePreview(rows: MeasureRow[]): MapPreview {
     const d2 = parseGroundMeters(row.dist2);
     if (d1 <= 0 && d2 <= 0) return;
 
-    const p1 = getVertexCoord(row.from1);
-    const p2 = getVertexCoord(row.from2);
+    const p1 = vtx(row.from1, ctx);
+    const p2 = vtx(row.from2, ctx);
     circles.push(
       { cx: p1[0], cy: p1[1], r: metersToSvg(d1), stroke: "#94a3b8", dashed: true },
       { cx: p2[0], cy: p2[1], r: metersToSvg(d2), stroke: "#94a3b8", dashed: true },
     );
 
     const hits = circleCircleIntersections(p1, d1, p2, d2);
-    const pt = pickIntersection(hits, "P1", polygonCentroid(PARCEL_SVG_RING));
+    const pt = pickIntersection(hits, "P1", ringCenter(ctx));
     if (pt) {
       polyline.push(pt);
       markers.push({ x: pt[0], y: pt[1], label: `M${i + 1}`, color: "#dc2626" });
@@ -359,8 +387,14 @@ export function buildFmbPreview(
   triDist1: string,
   triDist2: string,
   trianglePoint: string,
+  ctx?: MapGeometryContext,
 ): MapPreview {
   const len = parseGroundMeters(baselineLength, 45.6);
+  if (ctx) {
+    return {
+      hint: `FMB geometry loaded · baseline ${len.toFixed(2)} m · triangle point ${trianglePoint}`,
+    };
+  }
   const g2: SvgPoint = [FMB_G1[0] + metersToSvg(len), FMB_G1[1]];
   const d1 = parseGroundMeters(triDist1);
   const d2 = parseGroundMeters(triDist2);
@@ -399,9 +433,11 @@ export function buildLadderPreview(
   ladderRows: LadderRow[],
   hangDist1: string,
   hangDist2: string,
+  ctx?: MapGeometryContext,
 ): MapPreview {
-  const baseA: SvgPoint = [60, 190];
-  const baseB: SvgPoint = [260, 190];
+  const ring = ctx?.outerRing ?? PARCEL_SVG_RING;
+  const baseA: SvgPoint = ctx ? ring[0] : [60, 190];
+  const baseB: SvgPoint = ctx ? ring[Math.min(1, ring.length - 1)] : [260, 190];
   const polylines: SvgPoint[][] = [[baseA, baseB]];
   const markers: MapMarker[] = [
     { x: baseA[0], y: baseA[1], label: "BL-0", color: "#1A1A1A" },
@@ -440,7 +476,14 @@ export function buildSubdivisionPreview(
   polygons: { polygon: string; area: string; label: string }[],
   selectedLayer: string,
   layerLabel: string,
+  ctx?: MapGeometryContext,
 ): MapPreview {
+  if (ctx) {
+    return {
+      hint: `Layer ${selectedLayer}${layerLabel ? ` · ${layerLabel}` : ""} · ${polygons.length} FMB sub-parcel(s)`,
+    };
+  }
+
   const divLine: SvgPoint[] = [
     getVertexCoord("V1"),
     getVertexCoord("V6"),
@@ -485,7 +528,113 @@ function mergePlotRect(index: number): SvgPoint[] {
   ];
 }
 
-export function buildMergePreview(selectedPlots: string[], candidatePlots: readonly string[]): MapPreview {
+export const MERGE_ANIM_DURATION_S = 1.2;
+
+function closeSvgRing(ring: SvgPoint[]): SvgPoint[] {
+  if (ring.length < 3) return ring;
+  const [fx, fy] = ring[0];
+  const [lx, ly] = ring[ring.length - 1];
+  if (fx === lx && fy === ly) return ring;
+  return [...ring, ring[0]];
+}
+
+function ringFromTurfGeometry(geometry: GeoJSON.Geometry): SvgPoint[] | null {
+  if (geometry.type === "Polygon") {
+    return geometry.coordinates[0].map(([x, y]) => [x, y] as SvgPoint);
+  }
+  if (geometry.type === "MultiPolygon") {
+    let best: SvgPoint[] | null = null;
+    let bestArea = 0;
+    for (const poly of geometry.coordinates) {
+      const ring = poly[0].map(([x, y]) => [x, y] as SvgPoint);
+      const area = turf.area(turf.polygon([ring]));
+      if (area > bestArea) {
+        bestArea = area;
+        best = ring;
+      }
+    }
+    return best;
+  }
+  return null;
+}
+
+/** Union SVG-space rings (planar) into a single outer boundary for merge animation. */
+export function unionSvgRings(rings: SvgPoint[][]): SvgPoint[] | null {
+  const valid = rings.filter((ring) => ring.length >= 3);
+  if (valid.length === 0) return null;
+  if (valid.length === 1) return valid[0];
+
+  try {
+    const features = valid.map((ring) => turf.polygon([closeSvgRing(ring)]));
+    const unioned = turf.union(turf.featureCollection(features));
+    if (unioned) {
+      const ring = ringFromTurfGeometry(unioned.geometry);
+      if (ring && ring.length >= 3) return ring;
+    }
+  } catch {
+    /* fall through to convex hull */
+  }
+
+  try {
+    const collection = turf.featureCollection(
+      valid.map((ring) => turf.polygon([closeSvgRing(ring)])),
+    );
+    const hull = turf.convex(collection);
+    if (hull) {
+      const ring = ringFromTurfGeometry(hull.geometry);
+      if (ring && ring.length >= 3) return ring;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return valid[0];
+}
+
+export type MergeUnionResult = {
+  ring: SvgPoint[];
+  center: SvgPoint;
+};
+
+export function computeMergeUnionRing(
+  selectedPlots: string[],
+  options: {
+    fmbSubParcels?: { label: string; ring: SvgPoint[] }[];
+    candidatePlots?: readonly string[];
+  },
+): MergeUnionResult | null {
+  if (selectedPlots.length < 2) return null;
+
+  let rings: SvgPoint[][] = [];
+  if (options.fmbSubParcels) {
+    rings = options.fmbSubParcels
+      .filter((sp) => selectedPlots.includes(sp.label))
+      .map((sp) => sp.ring);
+  } else if (options.candidatePlots) {
+    rings = selectedPlots
+      .map((plot) => {
+        const idx = options.candidatePlots!.indexOf(plot);
+        return idx >= 0 ? mergePlotRect(idx) : null;
+      })
+      .filter((ring): ring is SvgPoint[] => ring !== null);
+  }
+
+  const ring = unionSvgRings(rings);
+  if (!ring) return null;
+  return { ring, center: polygonCentroid(ring) };
+}
+
+export function buildMergePreview(
+  selectedPlots: string[],
+  candidatePlots: readonly string[],
+  ctx?: MapGeometryContext,
+): MapPreview {
+  if (ctx) {
+    return {
+      hint: `${selectedPlots.length} plot(s) selected for merge`,
+    };
+  }
+
   const polygons = candidatePlots.map((plot, i) => {
     const rect = mergePlotRect(i);
     const selected = selectedPlots.includes(plot);
